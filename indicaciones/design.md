@@ -1,69 +1,122 @@
-Diseño de experiencia · Canvas AR
-Estado: PROPUESTO. Complementa el futuro devpost/design-brief.md; si discrepan, registrar y resolver. No sustituye el brief ni prescribe cifras ópticas del hardware.
-Principios aplicados
-Priorizar la escena y el contexto compartido sobre paneles permanentes [F3]. Mostrar detalle bajo demanda y retirar controles tras la acción [F5,F6]. Diseñar alrededor del campo visible y ofrecer reorientación [F7]. Estado visible, cancelación y recuperación se incorporan a cada flujo [F10]. Estas son adaptaciones de principios; ninguna guía de otra plataforma acredita compatibilidad con SPECS.
+# Experience Design · Canvas AR
 
-El espacio facilita conversación y relación con la mesa. La profundidad no representa una métrica en card sorting: las notas permanecen en una superficie virtual próxima a la referencia. El 3D semántico para arquitectura queda fuera del MVP.
-Composición espacial propuesta
-- Un marco discreto indica límites del canvas; las tres categorías se reconocen por etiqueta y zona.
-- Comenzar con un tamaño que permita reconocer toda la estructura; abrir detalle de una nota al seleccionarla.
-- La mesa define referencia y agrupación; no obligar a agacharse para leer texto horizontal. Probar notas/panel de detalle inclinados hacia la persona sin alterar posiciones compartidas.
-- Toolbar contextual junto al canvas; un solo panel de edición o historial abierto por persona.
-- Evitar paneles que sigan continuamente la cabeza. «Localizar canvas» orienta/revela un indicador y solo recoloca con confirmación.
-- El indicador fuera de campo debe conducir hacia el canvas, sin exigir giros bruscos ni ocupar el centro de la visión.
-Tamaño físico, inclinación y distancia: pendientes de G1/G2 y prueba de comodidad. No convertir px web a metros sin evaluar tamaño angular. No trasladar a SPECS el plano focal de un modelo de gafas descrito por otra empresa.
-Lenguaje visual y legibilidad
-Las referencias Apple, Expo y Figma aportadas inspiran jerarquía, moderación y foco, pero sus fondos blancos/negros, sombras y tamaños web no se trasladan literalmente. En pantallas aditivas el negro puede representar ausencia de luz; superficies brillantes grandes y halos pueden perjudicar lectura [F4]. Confirmar el comportamiento del dispositivo objetivo.
-Paleta ampliada
-Los HEX son valores de partida. Valida la legibilidad en las gafas sobre mesas claras, oscuras y con textura.
-Uso	Color	HEX	Aplicación
-Texto principal	Blanco frío	#F4F7FA	Títulos y texto de notas
-Texto secundario	Gris perla	#C8D2DE	Metadatos y ayudas breves
-Contorno neutro	Azul pizarra claro	#A0B1C5	Notas sin seleccionar y límites del canvas
-Categoría Ahora	Azul lavanda	#A6B8FF	Etiqueta y borde de la zona
-Categoría Después	Melocotón	#FFC1A6	Etiqueta y borde de la zona
-Categoría Explorar	Lila	#D7B6FF	Etiqueta y borde de la zona
-Selección	Cian claro	#73D8FF	Contorno reforzado y rótulo «Seleccionada»
-Guardado	Verde menta	#8FE3B0	Icono de confirmación y rótulo «Guardado»
-Pendiente o aviso	Ámbar claro	#FFD27A	Icono y rótulo «Guardando» o «Aviso»
-Error	Rosa coral	#FF9DA4	Icono, mensaje y acción de recuperación
+Status: PROPOSED. This document complements the future `devpost/design-brief.md`. Record and resolve any differences between them. Confirm hardware-specific optical parameters on the target device.
 
+## Design principles
 
-Aplica el color de categoría a la etiqueta y al borde. Conserva el texto de las notas en blanco frío. Al mover una nota entre categorías, actualiza su etiqueta y conserva el contorno cian mientras siga seleccionada.
+Prioritize the scene and shared context over persistent panels [F3]. Show details on demand and dismiss controls when the action is complete [F5,F6]. Design around the visible field of view and help users find their bearings [F7]. Show system status and provide ways to cancel and recover throughout each flow [F10]. These principles are adapted from other platforms. Verify their application on SPECS.
 
-Usar fuente compatible y con licencia comprobada, sin asumir disponibilidad de fuentes propietarias. Texto corto, líneas cómodas y espacio entre objetivos; no tipografía ultrafina. Medir lectura sobre fondos claros, oscuros y visualmente complejos. Una comprobación WCAG de una captura no verifica legibilidad en gafas transparentes.
-Interacción
-Acción	Interacción propuesta	Feedback/cancelación
-Colocar	Apuntar a referencia y confirmar con input admitido	Vista previa del marco; cancelar vuelve a inicio
-Seleccionar	Targeting + pinch/activación SIK	Contorno, título y acciones
-Mover	Arrastrar selección y soltar sobre categoría	Ghost y destino resaltado; fuera vuelve al origen
-Editar texto	Abrir editor compatible, confirmar o cancelar	Original intacto hasta commit
-Borrar	Acción contextual y confirmación	Nombre de nota en diálogo; cancelar conserva
-Guardar	Nombre y comentario opcional	«Guardando» hasta confirmación real
-Comparar	Elegir A y B en historial	Resumen por campo, vista de solo lectura
-Recuperar	Elegir versión y confirmar copia	Explica qué se reemplaza y que se conserva historial
+The canvas uses the table as a shared reference so people can discuss and organize ideas together. In card sorting, notes stay on a virtual surface near the table and depth carries no meaning. Using depth to represent architectural relationships is outside the MVP scope.
 
+## Proposed spatial layout
 
-Pinch es candidato, no el único gesto disponible garantizado. Evitar gestos personalizados invisibles, pinzas sostenidas, precisión fina y brazos elevados de forma continua. Estas decisiones requieren pruebas propias; el enlace Meta aportado no fue legible y no se atribuyen cifras o reglas concretas a ese documento [F8].
+- Use a subtle frame to mark the canvas boundary. Give each of the three categories a labeled zone.
+- Start at a scale that lets users recognize the overall layout. Show a note's details when the user selects it.
+- Use the table as a spatial reference and grouping surface. Test angled notes or detail panels so users can read them without bending over. Keep shared note positions stable.
+- Place a contextual toolbar next to the canvas. Allow one editing or history panel at a time per person.
+- Avoid panels that continuously follow the user's head. “Find canvas” shows a directional cue. Moving the canvas requires confirmation.
+- When the canvas is outside the field of view, guide the user toward it without demanding sudden turns or occupying the center of their vision.
 
-Para preview, una entrada alternativa solo se considera válida si está implementada y etiquetada. El modo de demo no debe dar la impresión de que existe reconocimiento de voz o teclado espacial sin probarlo.
-Componentes y estados
-Componente	Estados mínimos
-Nota	Normal, enfocada, seleccionada, moviéndose, pendiente, bloqueada por otra persona, error
-Categoría	Normal, destino válido, destino no disponible
-Estado de sesión	CORE, conectando, alineando, compartido, desconectado, cerrado
-Historial	Vacío, lista, guardando, límite alcanzado, error
-Comparador	Selección A/B, sin cambios, diferencias, salir
-Referencia	Por colocar, válida, perdida, recolocando
+Physical size, tilt, and viewing distance depend on G1/G2 and comfort testing. Evaluate angular size before converting web pixels to physical dimensions. Confirm the focal plane on the target SPECS device.
 
+## Visual language and readability
 
-En diff: «Añadida» con +, «Eliminada» con − y «Modificada» con lista de campos. Mostrar fantasma de eliminadas solo en comparación; no permitir manipularlo. Mantener el canvas actual al salir.
-Microcopy de referencia
-- «Coloca el canvas sobre una mesa despejada».
-- «No se ha guardado. Reintentar».
-- «En uso por Participante 2».
-- «Referencia perdida. Recoloca el canvas para continuar».
-- «Crear alternativa desde V1. Tu composición actual cambiará; las versiones guardadas seguirán disponibles».
-- «Modo individual» / «Colaboración simulada» / «Sesión compartida», según evidencia real.
-Validación de experiencia
-Comprobar comprensión de selección y guardado, lectura de títulos, localización del canvas, cancelación, recuperación sin pérdida y comodidad con manos relajadas. Detener interacción si aparece molestia y registrar el problema. La demo se plantea en un espacio estacionario despejado; no durante desplazamientos. Protocolo completo: ux-research.md.
+The supplied Apple, Expo, and Figma references inform hierarchy, restraint, and focus. Adapt their backgrounds, shadows, and sizing to the optical display. On additive displays, black can appear transparent, and large bright areas or halos can impair readability [F4]. Confirm how the target device renders these elements.
+
+### Extended palette
+
+These HEX values are starting points. Check readability on the glasses over light, dark, and textured tables.
+
+| Role | Color | HEX | Application |
+| --- | --- | --- | --- |
+| Primary text | Cool white | `#F4F7FA` | Headings and note text |
+| Secondary text | Pearl gray | `#C8D2DE` | Metadata and short hints |
+| Neutral outline | Light slate blue | `#A0B1C5` | Unselected notes and canvas boundaries |
+| Now category | Lavender blue | `#A6B8FF` | Zone label and border |
+| Later category | Peach | `#FFC1A6` | Zone label and border |
+| Explore category | Lilac | `#D7B6FF` | Zone label and border |
+| Selection | Light cyan | `#73D8FF` | Emphasized outline and “Selected” label |
+| Saved | Mint green | `#8FE3B0` | Confirmation icon and “Saved” label |
+| Pending or warning | Light amber | `#FFD27A` | Icon and “Saving” or “Warning” label |
+| Error | Coral pink | `#FF9DA4` | Error icon, message, and recovery action |
+
+Apply the category color to the label and border. Keep note text in cool white. When a note moves between categories, update its category label and retain the cyan outline while the note is selected.
+
+#### Buttons and pressed state
+
+| Button type | Examples | Default | Pressed (on tap) |
+| --- | --- | --- | --- |
+| Secondary | Cancel, Back | Pearl gray `#C8D2DE` | Darker pearl gray `#B3BFCD` |
+| Primary | Save, Confirm | Light cyan `#73D8FF` | Darker cyan `#59BFE8` |
+
+Apply the pressed color to the button border and icon while the user holds the press or pinch. Restore the default color on release or cancellation. Keep the label readable and use a thicker outline to reinforce the pressed state. Use pearl gray for secondary text. Treat a button press and a note's persistent selection as separate states.
+
+### AA contrast in every state
+
+- **Visible text**, including button labels and hints, must have at least **4.5:1** contrast against its effective background. WCAG 2.2 allows **3:1** for large text. Canvas AR uses **4.5:1** for all UI text. [WCAG 2.2, 1.4.3](https://www.w3.org/TR/WCAG22/#contrast-minimum)
+- **Informative icons, borders needed to identify controls, and focus, selection, and press indicators** must have at least **3:1** contrast against the relevant adjacent colors. Reinforce the pressed state with a change in outline thickness or shape. [WCAG 2.2, 1.4.11](https://www.w3.org/TR/WCAG22/#non-text-contrast)
+- Check default, focused, pressed, selected, disabled, warning, and error states. Evaluate the final appearance after applying transparency, layers, and animations. Use the unrounded ratio to determine whether it meets the threshold.
+
+**Reference background for preview and opaque surfaces:** `#182230`. Use the palette colors as foregrounds. Draw cool white button text and each state's borders and icons against this background. If a button touches another surface, also check any border required to identify the control against that surface.
+
+| Foreground | sRGB contrast ratio against `#182230` |
+| --- | ---: |
+| `#F4F7FA` | 14.91:1 |
+| `#C8D2DE` | 10.48:1 |
+| `#A0B1C5` | 7.32:1 |
+| `#A6B8FF` | 8.34:1 |
+| `#FFC1A6` | 10.25:1 |
+| `#D7B6FF` | 9.18:1 |
+| `#73D8FF` | 9.92:1 |
+| `#8FE3B0` | 10.52:1 |
+| `#FFD27A` | 11.26:1 |
+| `#FF9DA4` | 8.10:1 |
+| `#B3BFCD` | 8.59:1 |
+| `#59BFE8` | 7.66:1 |
+
+On transparent glasses, check contrast against the effective background on the device under the intended conditions of use. Use the dark reference background as a fallback only if the hardware can render it with sufficient contrast. If a real background brings contrast below the minimum or prevents verification, switch to a surface or view with verified contrast. If that view is unavailable, pause the affected flow. Record preview and on-device checks separately in T-22.
+
+Use a compatible font with a verified license. Keep lines short, choose a readable font weight, and leave enough space between interaction targets.
+
+## Interaction
+
+| Action | Proposed interaction | Feedback and cancellation |
+| --- | --- | --- |
+| Place | Aim at the reference surface and confirm with a supported input | Preview the frame. Cancel returns to the starting state. |
+| Select | Target the note and pinch or activate through SIK | Show the outline, title, and available actions. |
+| Move | Drag the selected note and release it over a category | Show a ghost preview and highlight the destination. Releasing outside a category returns the note to its original position. |
+| Edit text | Open a compatible editor, then confirm or cancel | Preserve the original text until the change is committed. |
+| Delete | Choose the contextual action and confirm | Show the note name in the dialog. Cancel keeps the note. |
+| Save | Enter a name and an optional comment | Show “Saving” until persistence is confirmed. |
+| Compare | Select versions A and B in history | Show a read-only summary of changes by field. |
+| Restore | Select a version and confirm the copy | Explain what will be replaced and that saved versions will remain available. |
+
+Pinch is a candidate gesture. Verify available gestures on the target device. Avoid custom gestures without visible cues, sustained pinches, fine targeting, and prolonged raised-arm interactions. Validate these decisions with project testing. The supplied Meta reference could not be read, so this document attributes no specific thresholds or rules to it [F8].
+
+For preview, label any implemented alternative input clearly. Show voice recognition or a spatial keyboard in the demo only after testing the capability.
+
+## Components and states
+
+| Component | Minimum states |
+| --- | --- |
+| Note | Default, focused, selected, moving, pending, locked by another participant, error |
+| Category | Default, valid drop target, unavailable drop target |
+| Session status | CORE, connecting, aligning, shared, disconnected, closed |
+| History | Empty, list, saving, limit reached, error |
+| Comparison | A/B selection, no changes, differences, exit |
+| Spatial reference | Awaiting placement, valid, lost, repositioning |
+
+In the comparison, show “Added” with `+`, “Removed” with `−`, and “Modified” with a list of changed fields. Show removed notes as read-only ghost previews during comparison. Keep the current canvas when the user exits.
+
+## Reference microcopy
+
+- “Place the canvas over a clear table.”
+- “Couldn’t save. Try again.”
+- “In use by Participant 2.”
+- “Spatial reference lost. Reposition the canvas to continue.”
+- “Create an alternative from V1. Your current layout will change. Your saved versions will stay available.”
+- “Solo mode” / “Simulated collaboration” / “Shared session,” according to the verified mode.
+
+## Experience validation
+
+Check whether users understand selection and saving, can read headings, find the canvas, cancel actions, and restore a version without losing saved work. Check whether they can interact comfortably with relaxed hands. Stop the interaction and record the issue if discomfort occurs. Run the demo in a clear space while participants are stationary. See `ux-research.md` for the full protocol.
