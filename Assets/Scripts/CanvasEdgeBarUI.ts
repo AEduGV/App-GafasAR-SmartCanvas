@@ -5,6 +5,7 @@ import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scrip
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {CanvasShape} from "./CanvasGeometry"
 import {makePill, paintPill} from "./CanvasPill"
+import {COLOR} from "./CanvasTheme"
 
 const BTN_W = 10
 const BTN_H = 3.6
@@ -154,10 +155,10 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     this.buttons.forEach((btn, key) => paintPill(btn, key === action))
   }
 
-  /** En azul mientras espera la segunda pulsación que confirma el borrado. */
+  /** Color de aviso mientras espera la segunda pulsación que confirma el borrado. */
   setDeleteArmed(armed: boolean): void {
     this.deleteArmed = armed
-    if (this.deleteButton) paintPill(this.deleteButton, armed)
+    if (this.deleteButton) paintPill(this.deleteButton, armed, COLOR.warning)
   }
 
   setShapeMenu(open: boolean, current: CanvasShape): void {

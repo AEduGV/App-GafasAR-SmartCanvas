@@ -1,16 +1,23 @@
-// Tokens de apple-brand-package/tokens.json adaptados a una pantalla de gafas.
-// La guía define superficies oscuras (surface-tile-*) y azul sobre oscuro (primary-on-dark);
-// se usan esas porque en una pantalla aditiva el negro es transparente.
+// Colores de indicaciones/design.md, que mandan sobre la marca en texto, selección y avisos.
+// Las superficies siguen apple-brand-package/tokens.json (surface-tile-*): en una pantalla
+// aditiva el negro es transparente.
 
 function hex(h: string, a: number = 1): vec4 {
   const n = parseInt(h.slice(1), 16)
   return new vec4(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, a)
 }
 
+export function withAlpha(c: vec4, a: number): vec4 {
+  return new vec4(c.x, c.y, c.z, a)
+}
+
 export const COLOR = {
-  primary: hex("#2997ff"),          // primary-on-dark: solo para lo interactivo
-  primaryFocus: hex("#0071e3"),
-  text: hex("#ffffff"),             // body-on-dark
+  primary: hex("#73D8FF"),          // design.md, selección: también lo activo, un solo color de foco
+  text: hex("#F4F7FA"),             // design.md, texto principal
+  warning: hex("#FFD27A"),          // design.md, pendiente/aviso
+  error: hex("#FF9DA4"),            // design.md, error
+  // Etiqueta sobre un botón de color claro. No es de design.md: el texto principal no se leería encima.
+  onAccent: hex("#10242E"),
   textMuted: hex("#cccccc"),        // body-muted
   surface: hex("#272729"),          // surface-tile-1
   surfaceRaised: hex("#2a2a2c"),    // surface-tile-2

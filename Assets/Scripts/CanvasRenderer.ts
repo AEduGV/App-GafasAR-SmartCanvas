@@ -15,7 +15,7 @@ import {
   roundedRect,
   shapeOutline,
 } from "./CanvasGeometry"
-import {COLOR, LAYER_GAP, PALETTE, RADIUS} from "./CanvasTheme"
+import {COLOR, LAYER_GAP, PALETTE, RADIUS, withAlpha} from "./CanvasTheme"
 
 const BASE_MATERIAL = requireAsset("../Materials/CanvasUnlit.mat") as Material
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
@@ -263,7 +263,7 @@ class ElementView {
 
   private refreshOutline(): void {
     this.outline.setVisible(this.selected || this.hovered)
-    this.outline.setColor(this.selected ? COLOR.primary : new vec4(1, 1, 1, 0.55))
+    this.outline.setColor(this.selected ? COLOR.primary : withAlpha(COLOR.text, 0.55))
   }
 
   destroy(): void {
@@ -426,12 +426,12 @@ export class CanvasRenderer {
 
   constructor(root: SceneObject, private doc: CanvasDocument) {
     this.root = root
-    this.surface = new MeshSlot(root, "Surface", new vec4(1, 1, 1, 0.1), false)
-    this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", new vec4(1, 1, 1, 0.4), false)
+    this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.text, 0.1), false)
+    this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", withAlpha(COLOR.text, 0.4), false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
     for (let i = 1; i < LAYER_COUNT; i++) {
-      const plane = new MeshSlot(root, "LayerPlane" + i, new vec4(1, 1, 1, 0.22), false)
+      const plane = new MeshSlot(root, "LayerPlane" + i, withAlpha(COLOR.text, 0.22), false)
       plane.setVisible(false)
       this.layerPlanes.push(plane)
       const label = makeText(plane.sceneObject, 39, COLOR.textMuted)

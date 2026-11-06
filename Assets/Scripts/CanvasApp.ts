@@ -11,7 +11,7 @@ import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, CanvasShape} from "./CanvasGeometry"
 import {Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
-import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS} from "./CanvasTheme"
+import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
 type Tool = "select" | "connect" | "draw" | "underline" | "moveCanvas"
 
@@ -33,8 +33,8 @@ const DOCK_LIFT_LOW = -18
 const DOCK_LIFT_HIGH = 22
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
-const BORDER_ACTIVE = new vec4(1, 1, 1, 0.8)
-const BORDER_IDLE = new vec4(1, 1, 1, 0.3)
+const BORDER_ACTIVE = withAlpha(COLOR.text, 0.8)
+const BORDER_IDLE = withAlpha(COLOR.text, 0.3)
 // Tiempo máximo de espera de la detección de superficie antes de usar el plano virtual.
 const CORNER_QUERY_TIMEOUT = 0.5
 // Distancia a la que el contenido se ve a escala 1. Más lejos, todo crece para seguir siendo legible.
@@ -304,6 +304,7 @@ export class CanvasApp extends BaseScriptComponent {
 
     this.initSurfaceDetection()
     this.dock.onAction.add((a) => this.onAction(a))
+    this.dock.setActive("width:" + this.widthIndex, true)
     this.createEvent("UpdateEvent").bind(() => this.update())
     this.createEvent("KeyPressEvent").bind((e) => this.onKey(e as KeyPressEvent))
 
@@ -999,7 +1000,7 @@ export class CanvasApp extends BaseScriptComponent {
       armed?.canvas.bar?.setDeleteArmed(false)
       this.deleteArmed = {canvas, until: getTime() + DELETE_CONFIRM_TIME}
       canvas.bar?.setDeleteArmed(true)
-      this.dock.setStatus("Este canvas tiene contenido: pulsa la X otra vez para borrarlo")
+      this.dock.setStatus("Este canvas tiene contenido: pulsa la X otra vez para borrarlo", "warning")
       return
     }
     this.pendingDelete = canvas
@@ -1065,7 +1066,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.planeUp = basis.up
     this.setCanvasScale(1)
     const right = basis.up.cross(basis.normal).normalize()
-    // Cada canvas de ejemplo nuevo se sitúa junto al anterior, sin taparlo.
+    // Cada canvas colocado así se sitúa junto al anterior, sin taparlo.
     const center = this.comfortableCenter(this.orientation).add(right.uniformScale(80 * (this.canvases.length - 1)))
     const a = center.sub(right.uniformScale(36)).sub(basis.up.uniformScale(22))
     const b = center.add(right.uniformScale(36)).add(basis.up.uniformScale(22))
@@ -1224,6 +1225,8 @@ export class CanvasApp extends BaseScriptComponent {
     if (!resolved) {
       // Pulsar fuera para dejar de escribir solo deselecciona: no empieza otro canvas.
       if (wasEditing) this.clearSelection()
+      // Un trazo que empieza un poco fuera es un fallo de puntería, no un canvas nuevo.
+      else if (this.tool === "draw") this.dock.setStatus("Dibuja dentro del canvas. Para crear otro, desactiva Dibujar", "warning")
       else this.startCanvasOutside(interactor)
       return
     }
@@ -1677,6 +1680,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (this.selectedConn) {
       const c = this.doc.connections.get(this.selectedConn)
       this.editing = {type: "connection", id: this.selectedConn, original: c?.label ?? "", created: false, startH: 0}
+      this.editFresh = false
       if (c) this.renderer.showCaretConnection(c, true)
       this.openKeyboard(c?.label ?? "")
     } else {
@@ -1702,7 +1706,10 @@ export class CanvasApp extends BaseScriptComponent {
     options.keyboardType = TextInputSystem.KeyboardType.Text
     options.returnKeyType = TextInputSystem.ReturnKeyType.Done
     options.initialText = initial
-    options.onTextChanged = (text: string) => this.setEditingText(text)
+    options.onTextChanged = (text: string) => {
+      this.editFresh = false
+      this.setEditingText(text)
+    }
     options.onReturnKeyPressed = () => this.finishEditing()
     global.textInputSystem.requestKeyboard(options)
   }
@@ -1717,7 +1724,7 @@ export class CanvasApp extends BaseScriptComponent {
   private setEditingText(text: string): void {
     if (!this.editing) return
     if (Array.from(text).length > MAX_TEXT) {
-      this.dock.setStatus("Máximo " + MAX_TEXT + " caracteres")
+      this.dock.setStatus("Máximo " + MAX_TEXT + " caracteres", "error")
       return
     }
     if (this.editing.type === "element") {
@@ -1774,7 +1781,7 @@ export class CanvasApp extends BaseScriptComponent {
     } else if (required && !text) {
       this.doc.update(el.id, {text: original, h: startH, y: el.y + (el.h - startH) / 2})
       this.noticeUntil = getTime() + NOTICE_TIME
-      this.dock.setStatus("El texto no puede quedar vacío: se recupera el anterior")
+      this.dock.setStatus("El texto no puede quedar vacío: se recupera el anterior", "error")
     } else if (text !== el.text) {
       this.doc.update(el.id, {text})
     }
@@ -1789,22 +1796,22 @@ export class CanvasApp extends BaseScriptComponent {
   private onKey(e: KeyPressEvent): void {
     if (!this.editing) return
     const key = e.key
-    let text = this.editFresh ? "" : this.currentEditingText()
-    this.editFresh = false
-    if (key === Keys.Backspace) {
-      text = text.slice(0, -1)
-    } else if (key === Keys.Space) {
-      text += " "
+    let typed: string
+    if (key === Keys.Space) {
+      typed = " "
     } else if (key >= Keys.Zero && key <= Keys.Nine) {
-      text += String(key - Keys.Zero)
+      typed = String(key - Keys.Zero)
     } else if (key >= Keys.A && key <= Keys.Z) {
       const letter = String.fromCharCode(97 + (key - Keys.A))
-      const shift = e.modifiers.indexOf(KeyModifiers.Shift) >= 0
-      text += shift ? letter.toUpperCase() : letter
+      typed = e.modifiers.indexOf(KeyModifiers.Shift) >= 0 ? letter.toUpperCase() : letter
+    } else if (key === Keys.Backspace) {
+      typed = ""
     } else {
-      return
+      return // Shift o una flecha no escriben: el texto de ejemplo debe seguir esperando
     }
-    this.setEditingText(text)
+    const current = this.editFresh ? "" : this.currentEditingText()
+    this.editFresh = false
+    this.setEditingText(key === Keys.Backspace ? current.slice(0, -1) : current + typed)
   }
 
   // ── Acciones del panel ───────────────────────────────────────────────────
@@ -1967,6 +1974,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (!def) return
     const el = this.doc.add({kind: "shape", shape: def.shape, x: pos.x, y: pos.y, w: 7, h: 7, layer: this.activeLayer, text: def.text, color: def.color})
     this.growAround(el.id)
+    this.setTool("select")
     this.selection.clear()
     this.selectedConn = null
     this.selection.add(el.id)
@@ -2013,7 +2021,7 @@ export class CanvasApp extends BaseScriptComponent {
     const el = this.selection.size === 1 ? this.selectedElement() : null
     const name = el ? "«" + (el.text ? el.text.split("\n")[0] : "este elemento") + "»" : this.selection.size + " elementos"
     this.noticeUntil = getTime() + DELETE_CONFIRM_TIME
-    this.dock.setStatus("Pulsa Borrar otra vez para eliminar " + name)
+    this.dock.setStatus("Pulsa Borrar otra vez para eliminar " + name, "warning")
     return false
   }
 
@@ -2063,7 +2071,7 @@ export class CanvasApp extends BaseScriptComponent {
     const now = getTime()
     if (now > this.clearArmedUntil) {
       this.clearArmedUntil = now + 3
-      this.dock.setStatus("Pulsa Vaciar otra vez para borrarlo todo")
+      this.dock.setStatus("Pulsa Vaciar otra vez para borrarlo todo", "warning")
       return
     }
     this.clearArmedUntil = -1

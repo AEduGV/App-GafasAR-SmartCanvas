@@ -2,7 +2,7 @@
 
 Este documento se carga solo al abrir Claude Code en esta carpeta, porque `CLAUDE.md` lo importa.
 **Mantenlo al día:** al terminar un cambio, actualiza las secciones de estado, decisiones y límites.
-Última actualización: 2026-11-06.
+Última actualización: 2026-11-07.
 
 ## Objetivo
 
@@ -16,7 +16,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Un solo usuario: la conexión entre dispositivos queda fuera.
 - Guardar versiones y Snap Cloud quedan fuera por ahora.
 - Plazo: 4 días desde el 2026-11-04. Se acepta no llegar a todo.
-- La identidad visual sigue `apple-brand-package/` (`DESIGN.md`, `tokens.json`).
+- La identidad visual sigue `indicaciones/design.md` en texto, selección y avisos, y `apple-brand-package/tokens.json` en lo demás. `apple-brand-package/DESIGN.md` está vacío.
 - El usuario se comunica en español: responde y escribe los textos de la interfaz en español.
 
 ## Guías de producto (`indicaciones/`)
@@ -25,7 +25,8 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 **Decisiones del usuario (2026-11-05), que mandan sobre las guías:**
 - Versiones (P-04 a P-06) y almacenamiento local quedan fuera por ahora; quizá se añadan más adelante. Reiniciar la Lens borra el contenido.
 - Superficie: mesa y pared.
-- Colores: seguir los tokens de `design.md`. Aún no aplicados en `CanvasTheme.ts`; falta aclarar si los botones activos pasan a `#73D8FF` o siguen en `#2997ff`.
+- Colores: siguen los tokens de `design.md`, aplicados en `CanvasTheme.ts`. `#73D8FF` es el único color de foco: selección y botones activos. `#FFD27A` para confirmaciones y avisos, `#FF9DA4` para errores. La etiqueta de un botón activo es oscura (`onAccent`, que no es de `design.md`) porque el texto principal no se lee sobre ese color. `#8FE3B0` (guardado) no se usa porque no hay guardado.
+- (2026-11-07) No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
 - Categorías, imágenes, comentarios y captura quedan fuera por ahora. No mostrar «Modo individual».
 - Voz: no intentarla por ahora. El botón Escribir con el teclado la simula. Se escribe en inglés y las limitaciones del teclado se quedan así.
 - Escribir no lleva botones Listo ni Cancelar: se termina deseleccionando.
@@ -37,7 +38,7 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 
 ## Qué funciona hoy
 
-- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores.
+- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar activo, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
 - **Barra del borde de cada canvas:** Mover, Dibujar, Escribir, Flecha, Forma y ×. Agrupar o Separar aparecen en una fila aparte cuando tienen sentido.
 - **Escribir:** edita el elemento seleccionado o crea un texto nuevo, y se escribe con el teclado. Pulsar fuera termina y deselecciona, sin empezar otro canvas. Si no se escribió nada, el texto nuevo desaparece. Máximo 80 caracteres; un texto o nota vaciado recupera el anterior; la caja crece hacia abajo. Borrar un elemento pide una segunda pulsación en 3 segundos.
 - **Mover:** el contenido viaja con el canvas. Al apuntar a una superficie de otra orientación, gira y se pega a ella con todo su contenido, también en grupo.

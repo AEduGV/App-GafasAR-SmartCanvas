@@ -25,16 +25,20 @@ function lighten(c: vec4, amount: number): vec4 {
   return new vec4(Math.min(1, c.x + amount), Math.min(1, c.y + amount), Math.min(1, c.z + amount), c.w)
 }
 
-export function paintPill(btn: CapsuleButton, active: boolean): void {
+const labels = new WeakMap<CapsuleButton, Text>()
+
+export function paintPill(btn: CapsuleButton, active: boolean, accent: vec4 = COLOR.primary): void {
+  const label = labels.get(btn)
+  if (label) label.textFill.color = active ? COLOR.onAccent : COLOR.text
   const vis = btn.visual as RoundedRectangleVisual
   if (!vis) return
-  const base = active ? COLOR.primary : COLOR.chip
+  const base = active ? accent : COLOR.chip
   vis.defaultBaseType = "Gradient"
   vis.hoveredBaseType = "Gradient"
   vis.triggeredBaseType = "Gradient"
   vis.defaultGradient = solid(base)
   vis.hoveredGradient = solid(lighten(base, 0.12))
-  vis.triggeredGradient = solid(active ? COLOR.primaryFocus : COLOR.primary)
+  vis.triggeredGradient = solid(active ? lighten(accent, -0.15) : COLOR.primary)
   vis.defaultHasBorder = false
   vis.hoveredHasBorder = false
   vis.triggeredHasBorder = false
@@ -64,7 +68,8 @@ export function makePill(
   t.text = label
   t.size = textSize
   t.depthTest = true
-  t.textFill.color = COLOR.text
+  t.textFill.color = isActive() ? COLOR.onAccent : COLOR.text
+  labels.set(btn, t)
   t.horizontalAlignment = HorizontalAlignment.Center
   t.verticalAlignment = VerticalAlignment.Center
   t.horizontalOverflow = HorizontalOverflow.Overflow

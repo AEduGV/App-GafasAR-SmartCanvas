@@ -22,6 +22,8 @@ const STATUS_SIZE = 41
 // Al colocar el canvas solo se ve el estado y una fila: el panel no debe tapar mesas ni paredes.
 const COMPACT_H = ROW_H * 2 + 2.4
 
+export type StatusTone = "normal" | "warning" | "error"
+
 interface ButtonDef {
   label: string
   action: string
@@ -110,7 +112,7 @@ const SELECTION: ButtonDef[] = [
 const PLACEMENT: ButtonDef[] = [
   {label: "Horizontal", action: "orient:h", w: 10},
   {label: "Vertical", action: "orient:v", w: 10},
-  {label: "Canvas de ejemplo", action: "quick", w: 15},
+  {label: "Colocar delante", action: "quick", w: 15},
   {label: "Cancelar", action: "cancel", w: 9},
 ]
 
@@ -127,6 +129,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   private placementRow: SceneObject | null = null
   private ready = false
   private pendingStatus = ""
+  private pendingTone: StatusTone = "normal"
   private activeActions = new Set<string>()
   private pendingPhase: "place" | "work" = "place"
 
@@ -186,7 +189,7 @@ export class CanvasDockUI extends BaseScriptComponent {
 
     this.ready = true
     this.setActive("tab:crear", true)
-    this.setStatus(this.pendingStatus)
+    this.setStatus(this.pendingStatus, this.pendingTone)
     this.setPhase(this.pendingPhase)
     this.activeActions.forEach((a) => this.paint(a))
   }
@@ -234,7 +237,7 @@ export class CanvasDockUI extends BaseScriptComponent {
 
   private paint(action: string): void {
     const btn = this.buttons.get(action)
-    if (btn && btn.visual) paintPill(btn, this.activeActions.has(action))
+    if (btn && btn.visual) paintPill(btn, this.activeActions.has(action), action === "delete" ? COLOR.warning : COLOR.primary)
   }
 
   setActive(action: string, active: boolean): void {
@@ -250,9 +253,13 @@ export class CanvasDockUI extends BaseScriptComponent {
     for (const tab of TABS) this.setActive(tab.action, tab.action === "tab:" + name)
   }
 
-  setStatus(msg: string): void {
+  /** El color refuerza el mensaje, que siempre explica por sí mismo qué ocurre. */
+  setStatus(msg: string, tone: StatusTone = "normal"): void {
     this.pendingStatus = msg
-    if (this.status) this.status.text = msg
+    this.pendingTone = tone
+    if (!this.status) return
+    this.status.text = msg
+    this.status.textFill.color = tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.text
   }
 
   setPhase(phase: "place" | "work"): void {
