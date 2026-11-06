@@ -124,3 +124,8 @@ Di siempre qué se probó con clics simulados y qué no: el usuario prueba con s
 - Nunca acceder a Lens Studio por HTTP, `curl` o `fetch`: solo las herramientas MCP (ver `AGENTS.md`).
 - `.mcp.json` contiene un token local: no repetirlo ni publicarlo.
 - No modificar `Cache/`.
+
+## Repositorio
+
+`https://github.com/AEduGV/App-GafasAR-SmartCanvas.git`, rama `main`. El usuario pidió ir subiendo los cambios: al terminar y probar un cambio, haz commit y `git push`.
+Nunca subir claves ni credenciales (`*.pem`, `.mcp.json`, `mcp.json`, `.codex/`, `.claude/`). Antes de añadir un tipo de archivo nuevo, comprueba `.gitignore`.
