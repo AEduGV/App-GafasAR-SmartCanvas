@@ -152,6 +152,21 @@ export function insideConvex(pts: vec2[], p: vec2): boolean {
   return true
 }
 
+/** Distancia de un punto al contorno cerrado. */
+export function outlineDistance(pts: vec2[], p: vec2): number {
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const c = pts[(i + 1) % pts.length]
+    const ex = c.x - a.x
+    const ey = c.y - a.y
+    const lengthSq = ex * ex + ey * ey
+    const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / lengthSq)) : 0
+    best = Math.min(best, Math.hypot(p.x - (a.x + ex * t), p.y - (a.y + ey * t)))
+  }
+  return best
+}
+
 export function appendFill(b: MeshBuilder, pts: vec2[], z: number): void {
   const base = b.getVerticesCount()
   let cx = 0

@@ -26,6 +26,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Versiones (P-04 a P-06) y almacenamiento local quedan fuera por ahora; quizá se añadan más adelante. Reiniciar la Lens borra el contenido.
 - Superficie: mesa y pared.
 - Colores: siguen los tokens de `design.md`, aplicados en `CanvasTheme.ts`. `#73D8FF` es el único color de foco: selección y botones activos. `#FFD27A` para confirmaciones y avisos, `#FF9DA4` para errores. La etiqueta de un botón activo es oscura (`onAccent`, que no es de `design.md`) porque el texto principal no se lee sobre ese color. `#8FE3B0` (guardado) no se usa porque no hay guardado.
+- (2026-11-07) Alba Anton revisó `design.md` (ahora en inglés) después de aplicar esos colores. Siguen valiendo los cuatro aplicados, pero **aún no está aplicado lo nuevo**: `#C8D2DE` para texto secundario y botones secundarios, `#A0B1C5` para contornos neutros y bordes de canvas, pulsado `#59BFE8` y `#B3BFCD`, contraste mínimo de 4,5:1 y etiqueta de botón en `#F4F7FA`. Falta que el usuario decida si se aplica.
 - (2026-11-07) No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
 - Categorías, imágenes, comentarios y captura quedan fuera por ahora. No mostrar «Modo individual».
 - Voz: no intentarla por ahora. El botón Escribir con el teclado la simula. Se escribe en inglés y las limitaciones del teclado se quedan así.
@@ -39,6 +40,7 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 ## Qué funciona hoy
 
 - **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar activo, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
+- **Cambiar el tamaño:** con Seleccionar, arrastrar el borde mueve ese lado y deja fijo el opuesto; desde una esquina, dos lados. Hay una franja de 2 unidades a cada lado del borde, que se ilumina al apuntarla. Mínimo 12×8, máximo 260, y nunca deja contenido fuera. Un elemento o botón encima del borde tiene prioridad.
 - **Barra del borde de cada canvas:** Mover, Dibujar, Escribir, Flecha, Forma y ×. Agrupar o Separar aparecen en una fila aparte cuando tienen sentido.
 - **Escribir:** edita el elemento seleccionado o crea un texto nuevo, y se escribe con el teclado. Pulsar fuera termina y deselecciona, sin empezar otro canvas. Si no se escribió nada, el texto nuevo desaparece. Máximo 80 caracteres; un texto o nota vaciado recupera el anterior; la caja crece hacia abajo. Borrar un elemento pide una segunda pulsación en 3 segundos.
 - **Mover:** el contenido viaja con el canvas. Al apuntar a una superficie de otra orientación, gira y se pega a ella con todo su contenido, también en grupo.
@@ -99,6 +101,8 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Marcar o soltar sobre el canto de un objeto orienta el canvas según esa cara. Se corrige moviéndolo.
 - Mover no salta entre superficies de la misma orientación a distinta altura, como de una mesa al suelo. Es a propósito, para que no se caiga al pasar por el borde.
 - Un triángulo no puede contener un rectángulo con menos del doble de su área: es geometría, no un fallo.
+- Cambiar el tamaño solo funciona con Seleccionar: con Mover, Dibujar o Flecha, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
+- `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
 - En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y la barra de un canvas pequeño cerca del borde puede quedar fuera.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
 - Sin probar: Escribir con teclado y ratón reales, sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular, llevar de mesa a pared un canvas con forma, una flecha entre un canvas con forma y otro bien separado.

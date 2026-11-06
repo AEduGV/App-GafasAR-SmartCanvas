@@ -9,7 +9,7 @@ import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, CanvasShape} from "./CanvasGeometry"
-import {Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot} from "./CanvasRenderer"
+import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -18,6 +18,8 @@ type Tool = "select" | "connect" | "draw" | "underline" | "moveCanvas"
 const MIN_W = 12
 const MIN_H = 8
 const MAX_SIDE = 260
+// Franja a cada lado del borde de un canvas desde la que se cambia su tamaño, en unidades del canvas.
+const BORDER_GRAB = 2
 const TAP_SLOP = 1.0
 const DOUBLE_TAP = 0.45
 const STROKE_STEP = 0.5
@@ -92,13 +94,14 @@ const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
 
 interface Press {
   interactor: Interactor
-  mode: "move" | "surface" | "connect" | "draw" | "connection" | "placeDrag" | "moveCanvas"
+  mode: "move" | "surface" | "connect" | "draw" | "connection" | "placeDrag" | "moveCanvas" | "resizeCanvas"
   id: string | null
   planeZ: number
   start: vec2
   last: vec2
   dragged: boolean
   drag?: CanvasDrag
+  resize?: {grab: BorderGrab; from: Bounds}
 }
 
 interface SurfaceFrame {
@@ -186,6 +189,7 @@ export class CanvasApp extends BaseScriptComponent {
   private flipCanvas: CanvasInstance | null = null
 
   private shapeMenuCanvas: CanvasInstance | null = null
+  private hoverBorder: CanvasInstance | null = null
 
   // Borrado
   private deleteArmed: {canvas: CanvasInstance; until: number} | null = null
@@ -282,9 +286,33 @@ export class CanvasApp extends BaseScriptComponent {
     for (const c of this.canvases) {
       if (!c.placed) continue
       const p = c.rayPoint(origin, dir)
-      if (p && (c.contains(p) || c.onEdgeBar(p))) return true
+      if (p && (c.contains(p) || c.onEdgeBar(p) || c.renderer.borderAt(p, BORDER_GRAB))) return true
     }
     return false
+  }
+
+  /** El borde del canvas más cercano al que apunta el rayo; un canvas por delante lo tapa. */
+  private borderUnderRay(origin: vec3, dir: vec3): {canvas: CanvasInstance; grab: BorderGrab} | null {
+    let bestCanvas: CanvasInstance | null = null
+    let bestGrab: BorderGrab | null = null
+    let bestDistance = Infinity
+    for (const c of this.canvases) {
+      if (!c.placed) continue
+      const p = c.rayPoint(origin, dir)
+      if (!p) continue
+      const grab = c.renderer.borderAt(p, BORDER_GRAB)
+      if (!grab && !c.contains(p)) continue
+      const distance = c.toWorld(new vec3(p.x, p.y, 0)).distance(origin)
+      // Dos canvas en el mismo plano: gana el borde al que se apunta con más precisión.
+      const tied = Math.abs(distance - bestDistance) < 0.01
+      const closerBorder = !!grab && (!bestGrab || grab.distance < bestGrab.distance)
+      if (tied ? closerBorder : distance < bestDistance) {
+        bestCanvas = c
+        bestGrab = grab
+        bestDistance = distance
+      }
+    }
+    return bestCanvas && bestGrab ? {canvas: bestCanvas, grab: bestGrab} : null
   }
 
   private start(): void {
@@ -1212,6 +1240,11 @@ export class CanvasApp extends BaseScriptComponent {
     const wasEditing = this.editing !== null
     if (wasEditing) this.finishEditing()
 
+    // Lo que hay encima del borde (un elemento, una flecha) tiene prioridad sobre él.
+    if (this.tool === "select" && (!resolved || ("canvas" in resolved && resolved.hit.type === "surface"))) {
+      if (this.beginResizeCanvas(interactor)) return
+    }
+
     // El colisionador es rectangular: las esquinas que quedan fuera de la forma no son del canvas.
     if (resolved && "canvas" in resolved && resolved.hit.type === "surface") {
       const ray = this.activeRay(interactor)
@@ -1277,6 +1310,54 @@ export class CanvasApp extends BaseScriptComponent {
     }
   }
 
+  private beginResizeCanvas(interactor: Interactor): boolean {
+    const ray = this.activeRay(interactor)
+    if (!ray || this.rayHitsDock(ray.origin, ray.dir)) return false
+    const hit = this.borderUnderRay(ray.origin, ray.dir)
+    if (!hit) return false
+    this.links.select(null)
+    this.activate(hit.canvas)
+    const p = hit.canvas.rayPoint(ray.origin, ray.dir) ?? new vec2(0, 0)
+    this.press = {
+      interactor, mode: "resizeCanvas", id: null, planeZ: 0, start: p, last: p, dragged: false,
+      resize: {grab: hit.grab, from: this.renderer.getBounds()},
+    }
+    this.refreshBorders(hit.canvas)
+    return true
+  }
+
+  /** Mueve solo los lados agarrados: el opuesto se queda donde estaba. */
+  private updateResizeCanvas(press: Press, p: vec2): void {
+    const resize = press.resize
+    if (!resize) return
+    if (!press.dragged) {
+      if (p.distance(press.start) <= TAP_SLOP) return
+      press.dragged = true
+    }
+    const f = resize.from
+    const dx = p.x - press.start.x
+    const dy = p.y - press.start.y
+    const next: Bounds = {minX: f.minX, maxX: f.maxX, minY: f.minY, maxY: f.maxY}
+    if (resize.grab.x < 0) next.minX = Math.max(f.maxX - MAX_SIDE, Math.min(f.maxX - MIN_W, f.minX + dx))
+    if (resize.grab.x > 0) next.maxX = Math.min(f.minX + MAX_SIDE, Math.max(f.minX + MIN_W, f.maxX + dx))
+    if (resize.grab.y < 0) next.minY = Math.max(f.maxY - MAX_SIDE, Math.min(f.maxY - MIN_H, f.minY + dy))
+    if (resize.grab.y > 0) next.maxY = Math.min(f.minY + MAX_SIDE, Math.max(f.minY + MIN_H, f.maxY + dy))
+    this.renderer.resizeTo(next)
+  }
+
+  private endResizeCanvas(press: Press): void {
+    this.hoverBorder = null
+    this.refreshBorders()
+    if (!press.dragged) {
+      this.clearSelection()
+      return
+    }
+    this.refreshGroupOptions()
+    this.placeDockForCanvas()
+    const b = this.renderer.getBounds()
+    this.log("canvas " + this.active.id + " redimensionado a " + (b.maxX - b.minX).toFixed(1) + "x" + (b.maxY - b.minY).toFixed(1))
+  }
+
   private startCanvasOutside(interactor: Interactor): void {
     const ray = this.activeRay(interactor)
     if (!ray || this.rayHitsDock(ray.origin, ray.dir) || this.rayNearAnyCanvas(ray.origin, ray.dir)) return
@@ -1321,6 +1402,9 @@ export class CanvasApp extends BaseScriptComponent {
         break
       case "moveCanvas":
         this.endMoveCanvas(press)
+        break
+      case "resizeCanvas":
+        this.endResizeCanvas(press)
         break
     }
   }
@@ -1368,6 +1452,8 @@ export class CanvasApp extends BaseScriptComponent {
       press.dragged = true
     } else if (press.mode === "draw") {
       this.extendStroke(p)
+    } else if (press.mode === "resizeCanvas") {
+      this.updateResizeCanvas(press, p)
     }
   }
 
@@ -1392,15 +1478,26 @@ export class CanvasApp extends BaseScriptComponent {
   private updateHover(): void {
     let hoverCanvas: CanvasInstance | null = null
     let hoverId: string | null = null
+    let border: CanvasInstance | null = null
     if (this.tool !== "moveCanvas" && this.tool !== "draw") {
       const it = SIK.InteractionManager.getTargetingInteractors()[0]
-      const resolved = it ? this.resolveTarget(it.currentInteractable) : null
+      const current = it ? it.currentInteractable : null
+      const resolved = this.resolveTarget(current)
       if (resolved && "canvas" in resolved && resolved.hit.type === "element") {
         hoverCanvas = resolved.canvas
         hoverId = resolved.hit.id
       }
+      const free = !current || (resolved && "canvas" in resolved && resolved.hit.type === "surface")
+      if (this.tool === "select" && it && free && it.startPoint && it.direction && !this.rayHitsDock(it.startPoint, it.direction)) {
+        border = this.borderUnderRay(it.startPoint, it.direction)?.canvas ?? null
+      }
     }
     for (const c of this.canvases) c.renderer.setHover(c === hoverCanvas ? hoverId : null)
+    // El borde se ilumina al apuntarlo: es la pista de que se puede arrastrar.
+    if (border !== this.hoverBorder) {
+      this.hoverBorder = border
+      this.refreshBorders(border)
+    }
   }
 
   // ── Selección ────────────────────────────────────────────────────────────
@@ -1486,7 +1583,9 @@ export class CanvasApp extends BaseScriptComponent {
       case "moveCanvas":
         return "Arrástralo con su contenido. Llévalo a una pared o una mesa para pegarlo"
       default:
-        return this.multi ? "Toca varios elementos y pulsa Agrupar" : "Toca para seleccionar, arrastra para mover"
+        return this.multi
+          ? "Toca varios elementos y pulsa Agrupar"
+          : "Toca para seleccionar, arrastra para mover. Arrastra un borde para cambiar el tamaño"
     }
   }
 

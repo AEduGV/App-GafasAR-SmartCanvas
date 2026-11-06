@@ -11,6 +11,7 @@ import {
   clearBuilder,
   createBuilder,
   insideConvex,
+  outlineDistance,
   outlineIntersection,
   roundedRect,
   shapeOutline,
@@ -31,6 +32,13 @@ export interface Bounds {
   maxX: number
   minY: number
   maxY: number
+}
+
+/** Qué lados mueve agarrar el borde en un punto: -1 mínimo, 1 máximo, 0 ninguno. */
+export interface BorderGrab {
+  x: number
+  y: number
+  distance: number
 }
 
 export type HitTarget =
@@ -389,6 +397,10 @@ export function connectionPath(a: CanvasElement, c: CanvasElement): vec3[] {
 const RETIRE_DELAY = 1.5
 // Holgura del contenido en una forma no rectangular: un margen mayor la agranda mucho.
 const SHAPE_MARGIN = 0.5
+// Hacia dentro, la franja del borde no debe comerse un canvas pequeño.
+const BORDER_INNER_RATIO = 0.15
+// En una forma no rectangular, a partir de qué parte del semieje un agarre mueve ese lado.
+const BORDER_AXIS_THRESHOLD = 0.45
 const retired: {so: SceneObject; at: number}[] = []
 
 export function retire(so: SceneObject): void {
@@ -493,6 +505,74 @@ export class CanvasRenderer {
   setBounds(b: Bounds): void {
     this.shapeBase = null
     this.applyBounds(b)
+  }
+
+  /** El borde en ese punto, con una franja de hasta `margin` unidades a cada lado. */
+  borderAt(p: vec2, margin: number): BorderGrab | null {
+    const b = this.bounds
+    const w = b.maxX - b.minX
+    const h = b.maxY - b.minY
+    const inner = Math.min(margin, Math.min(w, h) * BORDER_INNER_RATIO)
+    if (this.currentShape === "rect") {
+      const side = (v: number, lo: number, hi: number): number => {
+        if (v >= lo - margin && v <= lo + inner) return -1
+        if (v >= hi - inner && v <= hi + margin) return 1
+        return 0
+      }
+      if (p.x < b.minX - margin || p.x > b.maxX + margin || p.y < b.minY - margin || p.y > b.maxY + margin) return null
+      const x = side(p.x, b.minX, b.maxX)
+      const y = side(p.y, b.minY, b.maxY)
+      if (x === 0 && y === 0) return null
+      const dx = x === 0 ? Infinity : Math.abs(p.x - (x < 0 ? b.minX : b.maxX))
+      const dy = y === 0 ? Infinity : Math.abs(p.y - (y < 0 ? b.minY : b.maxY))
+      return {x, y, distance: Math.min(dx, dy)}
+    }
+    const cx = (b.minX + b.maxX) / 2
+    const cy = (b.minY + b.maxY) / 2
+    const rel = new vec2(p.x - cx, p.y - cy)
+    const distance = outlineDistance(this.outline, rel)
+    if (distance > (this.containsPoint(p) ? inner : margin)) return null
+    const u = rel.x / (w / 2)
+    const v = rel.y / (h / 2)
+    const x = Math.abs(u) >= BORDER_AXIS_THRESHOLD ? Math.sign(u) : 0
+    const y = Math.abs(v) >= BORDER_AXIS_THRESHOLD ? Math.sign(v) : 0
+    return x === 0 && y === 0 ? null : {x, y, distance}
+  }
+
+  /** Se acerca todo lo posible a ese tamaño sin dejar contenido fuera; cada eje se limita por separado. */
+  resizeTo(next: Bounds): void {
+    const pts = this.contentPoints()
+    const closest = (from: Bounds, to: Bounds): Bounds => {
+      if (this.contentFits(pts, to)) return to
+      const at = (t: number): Bounds => ({
+        minX: from.minX + (to.minX - from.minX) * t,
+        maxX: from.maxX + (to.maxX - from.maxX) * t,
+        minY: from.minY + (to.minY - from.minY) * t,
+        maxY: from.maxY + (to.maxY - from.maxY) * t,
+      })
+      let lo = 0
+      let hi = 1
+      for (let i = 0; i < 10; i++) {
+        const mid = (lo + hi) / 2
+        if (this.contentFits(pts, at(mid))) lo = mid
+        else hi = mid
+      }
+      return lo > 0 ? at(lo) : from
+    }
+    const b = this.bounds
+    const xDone = closest(b, {minX: next.minX, maxX: next.maxX, minY: b.minY, maxY: b.maxY})
+    const done = closest(xDone, {minX: xDone.minX, maxX: xDone.maxX, minY: next.minY, maxY: next.maxY})
+    if (done.minX !== b.minX || done.maxX !== b.maxX || done.minY !== b.minY || done.maxY !== b.maxY) this.setBounds(done)
+  }
+
+  private contentFits(pts: vec2[], b: Bounds): boolean {
+    if (this.currentShape === "rect") {
+      return pts.every((p) => p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY)
+    }
+    const outline = canvasOutline(this.currentShape, b.maxX - b.minX, b.maxY - b.minY, RADIUS.card)
+    const cx = (b.minX + b.maxX) / 2
+    const cy = (b.minY + b.maxY) / 2
+    return pts.every((p) => insideConvex(outline, new vec2(p.x - cx, p.y - cy)))
   }
 
   private applyBounds(b: Bounds): void {
