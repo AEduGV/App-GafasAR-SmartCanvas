@@ -1,0 +1,2 @@
+@AGENTS.md
+@CANVAS_AR_CONTEXTO.md

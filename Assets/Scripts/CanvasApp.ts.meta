@@ -1,0 +1,46 @@
+- !<AssetImportMetadata/9f81085d-ae64-4c5a-8716-45ba8cc3077c>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> 4d4a66b3-69ee-4794-9c94-51cc0beedc3f
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> 4d4a66b3-69ee-4794-9c94-51cc0beedc3f
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 8d680f7e-858b-4917-97ed-a83c80d83a0b
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/8d680f7e-858b-4917-97ed-a83c80d83a0b>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  VersionPrerelease: ""
+  UpdateOrder: 0
+  ComponentUid: c45c7d0e-5de3-4344-a2bf-0de82a440859
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    dock: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - dock: !<MappingBased.AssignableType_1> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - '// @input AssignableType_1 dock {"hint":"Panel de herramientas"}'
