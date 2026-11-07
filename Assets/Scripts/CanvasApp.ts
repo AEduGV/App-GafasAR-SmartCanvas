@@ -552,6 +552,23 @@ export class CanvasApp extends BaseScriptComponent {
     this.enterPlacement()
   }
 
+  /** Deshace la primera esquina: vuelve a lo que había o, si es el primer canvas, espera otra esquina. */
+  private cancelCorner(): void {
+    const placing = this.placing
+    if (placing && !(placing.isNew && !placing.previous)) {
+      this.cancelPlacement()
+      this.dock.setStatus("Canvas cancelado")
+      return
+    }
+    this.corner = null
+    this.cornerQuery = null
+    this.press = null
+    this.cornerA.setVisible(false)
+    this.canvasRoot.enabled = false
+    this.dock.setStatus("Canvas cancelado. Pellizca una esquina para empezar otro")
+    this.log("canvas cancelado")
+  }
+
   private cancelPlacement(): void {
     const placing = this.placing
     if (!placing) return
@@ -1495,8 +1512,9 @@ export class CanvasApp extends BaseScriptComponent {
       } else {
         const q = this.intersectPlane(ray.origin, ray.dir, this.corner, this.planeNormal)
         if (!q) return
+        // Un segundo clic en el mismo sitio que el primero cancela el canvas.
         if (q.distance(this.corner) < MIN_CORNER_DISTANCE * this.canvasScale) {
-          this.dock.setStatus("Pellizca más lejos de la primera esquina")
+          this.cancelCorner()
           return
         }
         this.finishPlacement(q)
