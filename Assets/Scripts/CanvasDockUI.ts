@@ -1,7 +1,6 @@
 // Botón de menú, línea de estado y panel de herramientas, pegados a la vista como una capa plana.
 // Solo expone acciones como texto y pinta el estado que le envían.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
-import {BackPlate} from "SpectaclesUIKit.lspkg/Scripts/BackPlate"
 import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexItem"
 import {FlexLayout} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexLayout"
 import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexTypes"
@@ -9,16 +8,28 @@ import {ContentVerticalAlignment} from "SpectaclesUIKit.lspkg/Scripts/Components
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {ICON} from "./CanvasIcons"
 import {LABEL_Z, makePill, paintPill, setPillHintListener, setPillIcon} from "./CanvasPill"
-import {appendFill, roundedRect} from "./CanvasGeometry"
+import {appendFill, appendStroke, outlineFacing, roundedRect} from "./CanvasGeometry"
 import {MeshSlot} from "./CanvasRenderer"
 import {COLOR, TONE, withAlpha} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
-// BackPlate solo ofrece grises fijos. Con este alfa, el texto de error llega a 4,5:1 aunque detrás haya blanco.
+// Con este alfa, el texto de error de la línea de estado llega a 4,5:1 aunque detrás haya blanco.
 const PLATE_ALPHA = 0.92
 const PLATE_RADIUS = 1.6
-const PLATE_Z = 0.2
+
+// Fondo del menú tipo «liquid glass»: vidrio translúcido con un canto claro y un brillo arriba. Los botones
+// llevan su propio fondo opaco, así que el vidrio puede ser más transparente que la línea de estado.
+const GLASS_TINT = new vec4(0.11, 0.16, 0.24, 0.62)
+const GLASS_SHEEN = new vec4(1, 1, 1, 0.06)
+const GLASS_RIM = new vec4(1, 1, 1, 0.22)
+const GLASS_GLINT = new vec4(1, 1, 1, 0.65)
+// Al abrir brota del botón como una gota y se estira con un rebote; al cerrar se recoge más deprisa.
+const OPEN_TIME = 0.42
+const CLOSE_TIME = 0.2
+const SPRING = 1.5
+// Los iconos aparecen cuando el vidrio ya casi ha llegado a su tamaño.
+const CONTENT_FROM = 0.55
 
 const PANEL_W = 57
 const ROW_H = 3
@@ -156,8 +167,12 @@ export class CanvasDockUI extends BaseScriptComponent {
   private toggle: CapsuleButton | null = null
   private opened = false
   private content: SceneObject | null = null
-  private plate: BackPlate | null = null
-  private plateFill: MeshSlot | null = null
+  private glassFill: MeshSlot | null = null
+  private glassSheen: MeshSlot | null = null
+  private glassRim: MeshSlot | null = null
+  private glassGlint: MeshSlot | null = null
+  private plateSize = new vec2(PANEL_W + 2, PANEL_H + 1.4)
+  private progress = 0
   private panes = new Map<string, SceneObject>()
   private buttons = new Map<string, CapsuleButton>()
   private workRows: SceneObject[] = []
@@ -182,12 +197,11 @@ export class CanvasDockUI extends BaseScriptComponent {
     const menu = global.scene.createSceneObject("Menu")
     menu.setParent(this.sceneObject)
     this.menu = menu
-    const plate = menu.createComponent(BackPlate.getTypeName()) as BackPlate
-    plate.style = "dark"
-    plate.size = new vec2(PANEL_W + 2, PANEL_H + 1.4)
-    this.plate = plate
-    this.plateFill = new MeshSlot(menu, "PlateFill", withAlpha(COLOR.surface, PLATE_ALPHA), false)
-    this.plateFill.sceneObject.getTransform().setLocalPosition(new vec3(0, 0, PLATE_Z))
+    this.glassFill = new MeshSlot(menu, "GlassFill", GLASS_TINT, false)
+    this.glassSheen = new MeshSlot(menu, "GlassSheen", GLASS_SHEEN, false)
+    this.glassRim = new MeshSlot(menu, "GlassRim", GLASS_RIM, false)
+    this.glassGlint = new MeshSlot(menu, "GlassGlint", GLASS_GLINT, false)
+    this.createEvent("UpdateEvent").bind(() => this.animate())
     this.build(menu)
   }
 
@@ -209,7 +223,10 @@ export class CanvasDockUI extends BaseScriptComponent {
 
   private setOpen(open: boolean): void {
     this.opened = open
-    if (this.menu) this.menu.enabled = open
+    if (open && this.menu) this.menu.enabled = true
+    // Los botones no se pueden pulsar mientras se cierra.
+    if (!open && this.content) this.content.enabled = false
+    if (!open && this.progress === 0 && this.menu) this.menu.enabled = false
     if (this.toggle) setPillIcon(this.toggle, open ? ICON.close : ICON.menu)
     this.setActive("menu", open)
     // Un botón que desaparece bajo el cursor no avisa de que ya no se le apunta.
@@ -236,10 +253,54 @@ export class CanvasDockUI extends BaseScriptComponent {
   }
 
   private setPlateSize(size: vec2): void {
-    if (this.plate) this.plate.size = size
-    if (this.plateFill) {
-      appendFill(this.plateFill.begin(), roundedRect(size.x, size.y, PLATE_RADIUS), 0)
-      this.plateFill.commit()
+    this.plateSize = size
+    this.drawGlass()
+  }
+
+  private animate(): void {
+    const target = this.opened ? 1 : 0
+    if (this.progress === target) return
+    const step = getDeltaTime() / (this.opened ? OPEN_TIME : CLOSE_TIME)
+    this.progress = this.opened ? Math.min(1, this.progress + step) : Math.max(0, this.progress - step)
+    this.drawGlass()
+    if (this.progress === 0 && this.menu) this.menu.enabled = false
+  }
+
+  /** De la forma del botón a la del panel: al abrir con un rebote elástico, al cerrar con suavidad. */
+  private drawGlass(): void {
+    if (!this.glassFill || !this.glassSheen || !this.glassRim || !this.glassGlint) return
+    const k = this.progress
+    const t = k - 1
+    const e = this.opened ? 1 + (SPRING + 1) * t * t * t + SPRING * t * t : k * k * (3 - 2 * k)
+    const full = this.plateSize
+    // Centro del botón en las coordenadas del menú, que se centra en el panel abierto.
+    const from = new vec2(TOGGLE_X, TOGGLE_Y - (MENU_TOP - full.y / 2))
+    const w = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.x - TOGGLE_SIZE) * e)
+    const h = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.y - TOGGLE_SIZE) * e)
+    const c = new vec2(from.x * (1 - e), from.y * (1 - e))
+    const r = Math.min(w, h) / 2 + (PLATE_RADIUS - Math.min(w, h) / 2) * Math.min(1, Math.max(0, e))
+    const pts = roundedRect(w, h, Math.max(0.1, r)).map((p) => p.add(c))
+
+    appendFill(this.glassFill.begin(), pts, 0.2)
+    this.glassFill.commit()
+    const band = roundedRect(w - 0.8, h * 0.42, Math.max(0.1, r - 0.4)).map((p) => new vec2(p.x + c.x, p.y + c.y + h * 0.27))
+    appendFill(this.glassSheen.begin(), band, 0.22)
+    this.glassSheen.commit()
+    appendStroke(this.glassRim.begin(), pts, true, 0.12, 0.24)
+    this.glassRim.commit()
+    const glint = this.glassGlint.begin()
+    for (const run of outlineFacing(pts.map((p) => p.sub(c)), new vec2(0, 1), 0.75)) {
+      appendStroke(glint, run.map((p) => p.add(c)), false, 0.22, 0.26)
+    }
+    this.glassGlint.commit()
+
+    if (this.content) {
+      const show = this.opened && k >= CONTENT_FROM
+      this.content.enabled = show
+      if (show) {
+        const pop = 0.9 + 0.1 * Math.min(1, (k - CONTENT_FROM) / (1 - CONTENT_FROM))
+        this.content.getTransform().setLocalScale(new vec3(pop, pop, 1))
+      }
     }
   }
 
@@ -396,7 +457,8 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.menu?.getTransform().setLocalPosition(new vec3(0, MENU_TOP - plateH / 2, 0))
     this.setOpen(false)
     // La columna empieza arriba: en modo compacto se baja para centrar su única fila en la placa.
-    const shift = working ? 0 : (PANEL_H - ROW_H) / 2
+    // Abierto entero, las filas quedan algo altas en el vidrio: se bajan un poco para centrarlas.
+    const shift = working ? 0.4 : (PANEL_H - ROW_H) / 2
     this.content?.getTransform().setLocalPosition(new vec3(0, -shift, 0.6))
     for (const row of this.workRows) row.enabled = working
     this.panes.forEach((row) => {
