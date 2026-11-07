@@ -15,8 +15,8 @@ export const COLOR = {
   textMuted: hex("#C8D2DE"),        // texto secundario y pistas
   outline: hex("#A0B1C5"),          // contorno neutro de notas y canvas
   surface: hex("#182230"),          // fondo de referencia
-  primary: hex("#73D8FF"),          // selección y botón activo
-  primaryPressed: hex("#59BFE8"),
+  primary: hex("#2E9FD8"),          // selección y botón activo. Más oscuro que el #73D8FF de design.md, a petición del usuario
+  primaryPressed: hex("#2689C4"),
   secondary: hex("#C8D2DE"),        // borde de botón secundario
   secondaryPressed: hex("#B3BFCD"),
   warning: hex("#FFD27A"),
