@@ -35,7 +35,6 @@ export const ICON = {
   library_add_check: requireAsset("../Icons/library_add_check_128x128.png") as Texture,
   memory: requireAsset("../Icons/memory_128x128.png") as Texture,
   menu: requireAsset("../Icons/menu_128x128.png") as Texture,
-  open_with: requireAsset("../Icons/open_with_128x128.png") as Texture,
   pen_size_1: requireAsset("../Icons/pen_size_1_128x128.png") as Texture,
   pen_size_3: requireAsset("../Icons/pen_size_3_128x128.png") as Texture,
   pen_size_5: requireAsset("../Icons/pen_size_5_128x128.png") as Texture,

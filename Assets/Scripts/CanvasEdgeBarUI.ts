@@ -20,11 +20,10 @@ const ARC_START = 90
 const ARC_END = 270
 const OPEN_TIME = 0.16
 
-export type EdgeTool = "move" | "draw" | "erase" | "write" | "arrow"
+export type EdgeTool = "draw" | "erase" | "write" | "arrow"
 export type EdgeAction = EdgeTool | "delete" | "shapeMenu" | "menu"
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
-  {action: "move", label: "Mover", icon: ICON.open_with},
   {action: "draw", label: "Dibujar", icon: ICON.draw},
   {action: "erase", label: "Goma", icon: ICON.ink_eraser},
   {action: "write", label: "Escribir", icon: ICON.edit_note},

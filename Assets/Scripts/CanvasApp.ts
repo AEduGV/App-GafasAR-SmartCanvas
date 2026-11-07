@@ -16,7 +16,7 @@ import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
-type Tool = "select" | "connect" | "draw" | "erase" | "underline" | "moveCanvas"
+type Tool = "select" | "connect" | "draw" | "erase" | "underline"
 
 const MIN_W = 12
 const MIN_H = 8
@@ -63,9 +63,9 @@ const CANDIDATE_DOT = 0.9
 const HORIZONTAL_MIN_Y = 0.8
 const VERTICAL_MAX_Y = 0.4
 const MAX_DRAG_DISTANCE = 600
-// Con Mover, mantener pulsado sin mover la mano recoge el canvas en una bola que se lleva en los dedos.
+// Mantener pulsado el interior sin mover la mano recoge el canvas en una bola que se lleva en los dedos.
 const HOLD_TIME = 0.5
-const HOLD_STILL_DOT = 0.9997 // unos 1,4 grados
+const HOLD_STILL_DOT = 0.9999 // unos 0,8 grados: por debajo, es un toque y el canvas no se mueve
 const BALL_RADIUS = 3
 const BALL_TIME = 0.18
 const BALL_SURFACE_GAP = 2
@@ -112,7 +112,7 @@ const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
 
 interface Press {
   interactor: Interactor
-  mode: "move" | "surface" | "connect" | "draw" | "erase" | "connection" | "placeDrag" | "moveCanvas" | "resizeCanvas"
+  mode: "move" | "connect" | "draw" | "erase" | "connection" | "placeDrag" | "moveCanvas" | "resizeCanvas"
   id: string | null
   planeZ: number
   start: vec2
@@ -810,7 +810,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (!wasWritingHere) this.startWriting()
       return
     }
-    const tool: Tool = action === "move" ? "moveCanvas" : action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
+    const tool: Tool = action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
     this.setTool(this.tool === tool ? "select" : tool)
   }
 
@@ -903,6 +903,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (ray.dir.dot(drag.startDir) < HOLD_STILL_DOT) drag.moved = true
       else if (getTime() - drag.startTime >= HOLD_TIME) this.gatherIntoBall(drag)
     }
+    if (!drag.moved && !drag.ball) return
     this.queryDragSurface(ray.origin, ray.dir, press)
     if (drag.ball) {
       this.updateBall(drag, ray.origin, ray.dir)
@@ -968,10 +969,11 @@ export class CanvasApp extends BaseScriptComponent {
   /**
    * Reaparece con su tamaño, en la dirección de la bola: en la superficie cercana a la que se apunta o, si no hay,
    * flotando de frente a la distancia que tenía. Traerlo hasta la bola lo haría enorme.
+   * Devuelve si cambió de sitio.
    */
-  private dropBall(drag: CanvasDrag): void {
+  private dropBall(drag: CanvasDrag): boolean {
     const ball = drag.ball
-    if (!ball) return
+    if (!ball) return false
     this.ball.enabled = false
     drag.ball = null
     drag.scale = ball.fullScale
@@ -979,7 +981,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (!ball.travelled) {
       drag.target = ball.from
       this.applyDragPose(drag)
-      return
+      return false
     }
     const hit = drag.surface
     const fresh = hit && getTime() - hit.time < 0.5 ? hit : null
@@ -992,6 +994,7 @@ export class CanvasApp extends BaseScriptComponent {
     drag.target = frame && near ? near.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
     for (const m of drag.members) m.canvas.orientation = frame ? frame.orientation : "vertical"
     this.applyDragPose(drag)
+    return true
   }
 
   private applyDragPose(drag: CanvasDrag): void {
@@ -1119,7 +1122,15 @@ export class CanvasApp extends BaseScriptComponent {
 
   private endMoveCanvas(press: Press): void {
     const drag = press.drag
-    if (drag?.ball) this.dropBall(drag)
+    // Un toque en el interior, sin arrastrar ni agarrar, solo deselecciona.
+    if (drag && !drag.moved && !drag.ball) {
+      this.clearSelection()
+      return
+    }
+    if (drag?.ball && !this.dropBall(drag)) {
+      this.dock.setStatus(this.toolHint())
+      return
+    }
     if (drag?.transition) {
       // Soltar a mitad de la transición deja el canvas ya en su pose final.
       drag.rotation = drag.transition.toRotation
@@ -1247,7 +1258,7 @@ export class CanvasApp extends BaseScriptComponent {
     members.forEach((c) => {
       c.groupId = gid
     })
-    this.dock.setStatus(members.size + " canvas agrupados: Mover los lleva juntos")
+    this.dock.setStatus(members.size + " canvas agrupados: al mover uno se mueven juntos")
     this.log("grupo " + gid + " con " + members.size)
   }
 
@@ -1455,10 +1466,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.activate(resolved.canvas)
     const hit = resolved.hit
 
-    if (this.tool === "moveCanvas") {
-      this.beginMoveCanvas(interactor)
-      return
-    }
     if (this.tool === "draw") {
       this.beginStroke(interactor)
       return
@@ -1494,9 +1501,7 @@ export class CanvasApp extends BaseScriptComponent {
       const p = new vec2(0, 0)
       this.press = {interactor, mode: "connection", id: hit.id, planeZ: 0, start: p, last: p, dragged: false}
     } else {
-      const z = layerZ(0)
-      const p = this.canvasPoint(interactor, z) ?? new vec2(0, 0)
-      this.press = {interactor, mode: "surface", id: null, planeZ: z, start: p, last: p, dragged: false}
+      this.beginMoveCanvas(interactor)
     }
   }
 
@@ -1578,9 +1583,6 @@ export class CanvasApp extends BaseScriptComponent {
         break
       case "connection":
         this.selectConnection(press.id)
-        break
-      case "surface":
-        this.clearSelection()
         break
       case "connect":
         this.endConnect(press, interactor)
@@ -1676,7 +1678,7 @@ export class CanvasApp extends BaseScriptComponent {
     let hoverCanvas: CanvasInstance | null = null
     let hoverId: string | null = null
     let border: CanvasInstance | null = null
-    if (this.tool !== "moveCanvas" && this.tool !== "draw" && this.tool !== "erase") {
+    if (this.tool !== "draw" && this.tool !== "erase") {
       const it = SIK.InteractionManager.getTargetingInteractors()[0]
       const current = it ? it.currentInteractable : null
       const resolved = this.resolveTarget(current)
@@ -1779,12 +1781,10 @@ export class CanvasApp extends BaseScriptComponent {
         return "Arrastra sobre lo dibujado para borrarlo. No afecta a notas ni figuras"
       case "underline":
         return "Pellizca un elemento para subrayarlo"
-      case "moveCanvas":
-        return "Arrástralo con su contenido, o mantenlo pulsado para agarrarlo y llevarlo a otro sitio"
       default:
         return this.multi
           ? "Toca varios elementos y pulsa Agrupar"
-          : "Toca para seleccionar, arrastra para mover. Arrastra un borde para cambiar el tamaño"
+          : "Arrastra el canvas para moverlo o un borde para estirarlo. Mantén pulsado para agarrarlo"
     }
   }
 
@@ -2188,7 +2188,7 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private edgeToolFor(tool: Tool): EdgeTool | null {
-    return tool === "moveCanvas" ? "move" : tool === "draw" ? "draw" : tool === "erase" ? "erase" : tool === "connect" ? "arrow" : null
+    return tool === "draw" ? "draw" : tool === "erase" ? "erase" : tool === "connect" ? "arrow" : null
   }
 
   private onKey(e: KeyPressEvent): void {
