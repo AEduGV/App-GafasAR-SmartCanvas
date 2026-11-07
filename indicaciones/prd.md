@@ -1,57 +1,56 @@
-# PRD · Canvas colaborativo AR
+# PRD · Collaborative AR Canvas
 
-Estado: PROPUESTA de producto, pendiente de validación con Alba. Fuente conceptual: [L2] en `sources.md`.
+Status: PROPOSED. Product scope awaits validation with Alba. Concept source: [L2] in `sources.md`.
 
-## Problema, usuarios y valor
+## Problem, users, and value
 
-En talleres presenciales se reorganizan ideas y se discuten alternativas, pero conservar una propuesta física puede interrumpir la siguiente. Queremos explorar una composición compartida en el espacio que permita volver a estados editables y explicar sus diferencias.
+In-person workshops involve reorganizing ideas and discussing alternatives. Preserving a physical arrangement can interrupt work on the next one. We want to explore a shared spatial canvas where participants can return to editable versions and explain what changed.
 
-Usuario primario: facilitador de UX/producto y un colaborador presencial. Usuario secundario futuro: equipo técnico que modela relaciones y revisa objetos físicos. No hay entrevistas realizadas ni mejora de productividad demostrada.
+The primary users are a UX or product facilitator and one in-person collaborator. Future users include technical teams that model relationships and review physical objects. User interviews and productivity gains remain unverified.
 
-Trabajo a resolver: «Cuando reorganizo ideas con mi equipo, quiero comparar una propuesta anterior con la actual y explorar una alternativa sin perder el trabajo posterior».
+Job to be done: “When I reorganize ideas with my team, I want to compare an earlier proposal with the current one and explore an alternative without losing later work.”
 
-## Por qué AR
+## Why AR
 
-El canvas se sitúa respecto a una mesa real para que las personas mantengan una referencia de conversación común. El espacio y la posición de las notas son parte del trabajo. Si una función se resuelve mejor como formulario de escritorio, no trasladar ese formulario entero a las gafas. Esta justificación es una hipótesis de valor que se comprobará con usuarios.
+The canvas is positioned relative to a physical table so participants have a shared reference for conversation. Space and note positions are part of the work. Keep tasks that are better suited to a desktop form on the desktop. Test the value of the spatial workflow with users.
 
-## Alcance propuesto
+## Proposed scope
 
-CORE: un canvas activo, una plantilla de card sorting cerrado, tres categorías editables, hasta 12 notas y cinco snapshots por canvas. Semilla de demo: seis notas distribuidas en «Ahora», «Después» y «Explorar»; no representa datos de investigación.
+**CORE.** One active canvas, one closed card-sorting template, three editable categories, up to 12 notes, and five snapshots per canvas. The demo starts with six sample notes across “Now,” “Later,” and “Explore.”
 
-COLLAB: dos personas presenciales, edición de notas distintas y exclusión de edición del mismo elemento. Su activación depende de la puerta G3 de `decisions.md`. Con CORE se conserva la propuesta de versiones; no se afirma multiusuario.
+**COLLAB.** Two co-located participants can edit different notes, with exclusive editing for any single note. Activation depends on gate G3 in `decisions.md`. CORE supports the versioning workflow in solo mode.
 
-Los límites son presupuestos de demo elegidos aquí, no límites de SPECS. Los números se centralizan en SRD y configuración al implementar.
+These are proposed demo limits. Centralize the values in the SRD and implementation configuration.
 
-## Requisitos y criterios de aceptación
+## Requirements and acceptance criteria
 
-| ID | Prioridad/modo | Comportamiento y aceptación observable |
+| ID | Priority and mode | Observable behavior and acceptance criteria |
 | --- | --- | --- |
-| P-01 | P0 CORE | Al iniciar, ofrecer colocar canvas; confirmar una referencia válida muestra tres categorías y la semilla. Cancelar no crea contenido duplicado. En preview se admite referencia simulada etiquetada. |
-| P-02 | P0 CORE | Crear, renombrar y eliminar una nota; confirmar conserva el texto y cancelar conserva el original. Rechazar vacío o exceso de longitud con mensaje claro. Antes de borrar, confirmar. |
-| P-03 | P0 CORE | Mover una nota a otra categoría; soltar dentro confirma pertenencia y posición, fuera vuelve al estado previo. Una selección muestra contorno y acciones. |
-| P-04 | P0 CORE | Guardar snapshot con nombre y nota de decisión opcional. Solo aparece como guardado tras confirmación del almacenamiento duradero local. Reiniciar conserva snapshots y último estado confirmado. |
-| P-05 | P0 CORE | Elegir dos snapshots guardados muestra notas añadidas, eliminadas o modificadas por ID; distingue texto, categoría y posición. Comparar no edita el canvas. |
-| P-06 | P0 CORE | Recuperar un snapshot crea una nueva revisión actual desde ese contenido; conserva las versiones posteriores. Cancelar no modifica nada. |
-| P-07 | P0 CORE | Mostrar colocación, edición, guardado, comparación y error; ante pérdida de referencia suspender manipulación y ofrecer recolocar sin perder contenido. |
-| P-08 | P0 CORE | Todo el flujo principal y su alternativa de error son demostrables en preview con datos semilla. La UI identifica simulación y capacidades no disponibles. |
-| P-09 | P1 COLLAB | Tras completar unión y alineación, ambos clientes ven los mismos IDs, textos, categorías y posiciones. Dos notas distintas se editan sin pérdida; la misma nota no admite dos editores a la vez. |
-| P-10 | P1 COLLAB | Desconexión bloquea nuevas escrituras; al volver, recuperar estado de la autoridad. Salida del anfitrión cierra sesión de forma explícita y conserva lo ya guardado en su dispositivo. |
+| P-01 | P0 CORE | Offer canvas placement on startup. Confirming a valid reference shows three categories and the sample notes. Canceling creates no duplicate content. Preview may use a clearly labeled simulated reference. |
+| P-02 | P0 CORE | Create, rename, and delete notes. Confirming a text edit saves the new text. Canceling preserves the original. Reject empty or overlong input with a clear message. Ask for confirmation before deletion. |
+| P-03 | P0 CORE | Move a note to another category. Releasing inside the target updates membership and position. Releasing outside restores the previous state. Selecting a note shows its outline and available actions. |
+| P-04 | P0 CORE | Save a named snapshot with an optional decision note. Show “Saved” only after confirming a durable local write. A restart retains snapshots and the last confirmed state. |
+| P-05 | P0 CORE | Selecting two saved snapshots shows added, removed, and modified notes by ID. Distinguish text, category, and position changes. Comparison is read-only. |
+| P-06 | P0 CORE | Restoring a snapshot creates a new current revision from its content and keeps later versions available. Canceling leaves the state as it was. |
+| P-07 | P0 CORE | Show placement, editing, saving, comparison, and error states. If the spatial reference is lost, suspend manipulation and offer repositioning while preserving content. |
+| P-08 | P0 CORE | Demonstrate the complete primary flow and its error recovery path in preview with sample data. Label simulations and unavailable capabilities. |
+| P-09 | P1 COLLAB | After joining and aligning, both clients see the same note IDs, text, categories, and positions. Two different notes can be edited without losing changes. Each note allows one editor at a time. |
+| P-10 | P1 COLLAB | A disconnection blocks new writes. On reconnection, recover the authoritative state. If the host leaves, explicitly close the session and retain data already saved on the host device. |
 
-## Flujo principal de demo
+## Main demo flow
 
-Colocar canvas → organizar seis notas → editar una → guardar V1 → modificar texto y mover una nota → añadir otra y guardar V2 → comparar V1/V2 → recuperar V1 como alternativa → comprobar que V2 sigue disponible.
+Place the canvas → organize six notes → edit one → save V1 → change text and move a note → add another note and save V2 → compare V1 and V2 → restore V1 as an alternative → verify that V2 is still available.
 
-Si COLLAB está verificado, insertar antes de V1 una edición por cada participante. No sustituir una sesión real por una animación sin indicarlo.
+If COLLAB has been verified, show one edit by each participant before saving V1. Clearly label any simulated session.
 
-## Exclusiones del MVP
+## Outside MVP scope
 
-Dibujo libre; múltiples plantillas; símbolos, puertas lógicas, flechas y diagramación; fotos y OCR; stickers; comentarios y menciones; importación desde herramientas externas; ramificación/merge tipo Git; colaboración remota; más de dos participantes; cuentas propias; sincronización entre dispositivos de snapshots duraderos; recuperación automática de anclajes entre sesiones; IA generativa dentro de la aplicación.
+Freehand drawing, multiple templates, symbols, logic gates, arrows, diagramming, photos and OCR, stickers, comments and mentions, imports from external tools, Git-style branching and merging, remote collaboration, more than two participants, custom accounts, cross-device sync of durable snapshots, automatic anchor recovery across sessions, and in-app generative AI.
 
-La visión futura conserva estas posibilidades, pero no obliga a implementarlas. Recuperar como revisión nueva aporta exploración de alternativas; no es un sistema completo de ramas.
+Restoring a version as a new revision lets users explore an alternative within the existing history.
 
-## Éxito y salida
+## Success and release criteria
 
-Éxito funcional: casos CORE del plan de pruebas pasan en preview y almacenamiento real, sin pérdida silenciosa. Objetivo de usabilidad propuesto: 3 de 4 participantes completan organizar/guardar/comparar/recuperar en cinco minutos tras una introducción breve y explican que recuperar conserva V2. Esta muestra es exploratoria, sin pretensión estadística.
+CORE test cases pass in preview, with real storage exercised where required and no silent data loss. The proposed exploratory usability target is for three of four participants to organize, save, compare, and restore within five minutes of a short introduction and explain that restoring preserves V2.
 
-Salida de hackatón: flujo consistente y vídeo fiel a lo implementado; usar `docs/hackathon.md` para las condiciones externas. Aprobar el modo final y documentar las funciones pendientes antes de grabar.
-
+For the hackathon, deliver a consistent flow and a video that reflects the implementation. Check external submission conditions in `docs/hackathon.md`. Approve the demo mode and document pending capabilities before recording.
