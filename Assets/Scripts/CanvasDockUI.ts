@@ -29,11 +29,13 @@ const SPRING = 1.5
 // Los iconos aparecen cuando el vidrio ya casi ha llegado a su tamaño.
 const CONTENT_FROM = 0.55
 
-// Barra lateral: cada sección es una columna que baja desde el botón, una junto a otra.
-const BTN_H = 3
+// Barra lateral de una sola columna con secciones plegables: una cabecera con nombre por sección y,
+// debajo de la abierta, sus botones. Con la sección más larga abierta cabe justo en la franja visible.
+const BTN_H = 2.8
+const HEADER_H = 2.6
+const HEADER_W = 9
 const ICON_W = 5.2
-const GAP = 0.5
-const COL_GAP = 0.8
+const GAP = 0.4
 const PAD = 1
 
 const BUTTON_SIZE = 39
@@ -171,13 +173,10 @@ export class CanvasDockUI extends BaseScriptComponent {
   private glassRim: MeshSlot | null = null
   private glassGlint: MeshSlot | null = null
   private plateSize = new vec2(ICON_W + PAD * 2, BTN_H + PAD * 2)
-  private columns: {so: SceneObject; count: number; width: number}[] = []
+  private sections: {key: string; header: SceneObject; items: SceneObject; count: number}[] = []
+  private expanded = "tools"
   private progress = 0
-  private panes = new Map<string, SceneObject>()
   private buttons = new Map<string, CapsuleButton>()
-  private toolsColumn: SceneObject | null = null
-  private tabsColumn: SceneObject | null = null
-  private selectionColumn: SceneObject | null = null
   private placementColumn: SceneObject | null = null
   private ready = false
   private pendingStatus = ""
@@ -317,30 +316,37 @@ export class CanvasDockUI extends BaseScriptComponent {
     content.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
     this.content = content
 
-    const paneWidth = Math.max(...Object.keys(PANES).map((name) => this.columnWidth(PANES[name])))
-    this.toolsColumn = this.makeColumn(content, TOOLS)
-    this.tabsColumn = this.makeColumn(content, TABS)
-    for (const name of Object.keys(PANES)) {
-      const col = this.makeColumn(content, PANES[name], paneWidth)
-      this.panes.set(name, col)
-      col.enabled = name === "crear"
+    this.addSection(content, "tools", "Herramientas", TOOLS)
+    for (const tab of TABS) {
+      const key = tab.action.split(":")[1]
+      this.addSection(content, key, tab.label, PANES[key])
     }
-    this.selectionColumn = this.makeColumn(content, SELECTION)
+    this.addSection(content, "selection", "Selección", SELECTION)
     this.placementColumn = this.makeColumn(content, PLACEMENT)
 
     this.ready = true
-    this.setActive("tab:crear", true)
     this.setPhase(this.pendingPhase)
     this.activeActions.forEach((a) => this.paint(a))
     this.setOpen(false)
   }
 
-  private buttonWidth(def: ButtonDef): number {
-    return def.icon ? ICON_W : def.w ?? ICON_W
+  /** Una cabecera que despliega la sección y, debajo, la columna con sus botones. */
+  private addSection(parent: SceneObject, key: string, label: string, defs: ButtonDef[]): void {
+    const action = "section:" + key
+    const header = makePill(parent, label, HEADER_W, HEADER_H, BUTTON_SIZE, () => this.activeActions.has(action), () => this.openSection(key))
+    this.buttons.set(action, header)
+    const items = this.makeColumn(parent, defs)
+    this.sections.push({key, header: header.getSceneObject(), items, count: defs.length})
   }
 
-  private columnWidth(defs: ButtonDef[]): number {
-    return Math.max(...defs.map((d) => this.buttonWidth(d)))
+  private openSection(key: string): void {
+    this.expanded = key
+    for (const sec of this.sections) this.setActive("section:" + sec.key, sec.key === key)
+    if (this.ready) this.layoutColumns()
+  }
+
+  private buttonWidth(def: ButtonDef): number {
+    return def.icon ? ICON_W : def.w ?? ICON_W
   }
 
   private columnHeight(count: number): number {
@@ -381,11 +387,11 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.statusPlate.commit()
   }
 
-  private makeColumn(parent: SceneObject, defs: ButtonDef[], width: number = this.columnWidth(defs)): SceneObject {
+  private makeColumn(parent: SceneObject, defs: ButtonDef[]): SceneObject {
     const col = global.scene.createSceneObject("Column")
     col.setParent(parent)
     const flex = col.createComponent(FlexLayout.getTypeName()) as FlexLayout
-    flex.width = width
+    flex.width = HEADER_W
     flex.height = this.columnHeight(defs.length)
     flex.direction = FlexDirection.Column
     flex.justifyContent = FlexJustify.Start
@@ -407,34 +413,37 @@ export class CanvasDockUI extends BaseScriptComponent {
       )
       this.buttons.set(def.action, btn)
     }
-    this.columns.push({so: col, count: defs.length, width})
     return col
   }
 
-  /** Coloca de izquierda a derecha las columnas visibles, colgando del borde superior, y ajusta el vidrio. */
+  /** Apila de arriba abajo las cabeceras y, bajo la abierta, sus botones; el vidrio se ajusta al total. */
   private layoutColumns(): void {
-    const order = this.pendingPhase === "work"
-      ? [this.toolsColumn, this.tabsColumn, this.visiblePane(), this.selectionColumn]
-      : [this.placementColumn]
-    let x = PAD
-    let tallest = 0
-    for (const so of order) {
-      const info = this.columns.find((c) => c.so === so)
-      if (!info) continue
-      const h = this.columnHeight(info.count)
-      info.so.getTransform().setLocalPosition(new vec3(x + info.width / 2, -PAD - h / 2, 0))
-      x += info.width + COL_GAP
-      tallest = Math.max(tallest, h)
+    const working = this.pendingPhase === "work"
+    const x = PAD + HEADER_W / 2
+    let y = -PAD
+    const place = (so: SceneObject, h: number): void => {
+      so.getTransform().setLocalPosition(new vec3(x, y - h / 2, 0))
+      y -= h + GAP
     }
-    this.setPlateSize(new vec2(x - COL_GAP + PAD, tallest + PAD * 2))
-  }
-
-  private visiblePane(): SceneObject | null {
-    let found: SceneObject | null = null
-    this.panes.forEach((col, key) => {
-      if (this.activeActions.has("tab:" + key)) found = col
-    })
-    return found
+    if (working) {
+      for (const sec of this.sections) {
+        sec.header.enabled = true
+        place(sec.header, HEADER_H)
+        const open = sec.key === this.expanded
+        sec.items.enabled = open
+        if (open) place(sec.items, this.columnHeight(sec.count))
+      }
+    } else {
+      for (const sec of this.sections) {
+        sec.header.enabled = false
+        sec.items.enabled = false
+      }
+    }
+    if (this.placementColumn) {
+      this.placementColumn.enabled = !working
+      if (!working) place(this.placementColumn, this.columnHeight(PLACEMENT.length))
+    }
+    this.setPlateSize(new vec2(HEADER_W + PAD * 2, -y - GAP + PAD))
   }
 
   private paint(action: string): void {
@@ -448,12 +457,9 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (this.ready) this.paint(action)
   }
 
+  /** Las pestañas de antes son ahora secciones: se despliega la suya. */
   showTab(name: string): void {
-    this.panes.forEach((col, key) => {
-      col.enabled = key === name
-    })
-    for (const tab of TABS) this.setActive(tab.action, tab.action === "tab:" + name)
-    if (this.ready) this.layoutColumns()
+    this.openSection(name)
   }
 
   /** El nombre del botón de solo icono al que se apunta; al salir vuelve el mensaje que había. */
@@ -475,25 +481,9 @@ export class CanvasDockUI extends BaseScriptComponent {
   setPhase(phase: "place" | "work"): void {
     this.pendingPhase = phase
     if (!this.ready) return
-    const working = phase === "work"
     this.menu?.getTransform().setLocalPosition(new vec3(MENU_LEFT, MENU_TOP, 0))
     this.setOpen(false)
-    if (this.toolsColumn) this.toolsColumn.enabled = working
-    if (this.tabsColumn) this.tabsColumn.enabled = working
-    this.panes.forEach((col) => {
-      col.enabled = working && this.activeActions.has("tab:" + this.paneName(col))
-    })
-    if (this.selectionColumn) this.selectionColumn.enabled = working
-    if (this.placementColumn) this.placementColumn.enabled = !working
-    this.layoutColumns()
-  }
-
-  private paneName(target: SceneObject): string {
-    let found = ""
-    this.panes.forEach((row, key) => {
-      if (row === target) found = key
-    })
-    return found
+    this.openSection(this.expanded)
   }
 
   /** Si un rayo pasa por algo visible de esta capa: el botón, el estado o el menú abierto. */
