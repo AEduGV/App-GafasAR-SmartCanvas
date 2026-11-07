@@ -4,7 +4,7 @@ import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/Cap
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {CanvasShape} from "./CanvasGeometry"
 import {ICON} from "./CanvasIcons"
-import {makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
+import {addPillEdge, makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
 import {TONE} from "./CanvasTheme"
 
 const HUB_SIZE = 4.6
@@ -99,6 +99,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     this.shapeRing.enabled = false
 
     this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
+    addPillEdge(this.hub)
 
     this.layout()
     this.ring.enabled = false
@@ -106,7 +107,9 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   }
 
   private makeItem(parent: SceneObject, label: string, icon: Texture, isActive: () => boolean, onPress: () => void): CapsuleButton {
-    return makePill(parent, label, ITEM_SIZE, ITEM_SIZE, TEXT_SIZE, isActive, onPress, icon)
+    const btn = makePill(parent, label, ITEM_SIZE, ITEM_SIZE, TEXT_SIZE, isActive, onPress, icon)
+    addPillEdge(btn)
+    return btn
   }
 
   /** Dibujar, Goma y Escribir en el anillo interior; Flecha, Forma y la papelera en el exterior. */

@@ -4,6 +4,8 @@ import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/F
 import {GradientParameters} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
 import {IMAGE_MATERIAL_ASSET} from "SpectaclesUIKit.lspkg/Scripts/Utility/Assets"
+import {appendStroke, appendWall, roundedRect} from "./CanvasGeometry"
+import {MeshSlot} from "./CanvasRenderer"
 import {ButtonTone, COLOR, TONE} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
@@ -18,6 +20,8 @@ const BORDER_PRESSED = 0.26
 const HOVER_LIGHTEN = 0.08
 // Parte de la altura del botón que ocupa su icono.
 const ICON_RATIO = 0.72
+// Canto de lámina, como el de los canvas: mismo grosor y el color del borde en reposo o activo.
+const EDGE_DEPTH = 0.4
 
 function solid(c: vec4): GradientParameters {
   return {
@@ -59,6 +63,21 @@ export function paintPill(btn: CapsuleButton, active: boolean, tone: ButtonTone 
   vis.defaultBorderSize = size
   vis.hoveredBorderSize = size
   vis.triggeredBorderSize = BORDER_PRESSED
+  edges.get(btn)?.setColor(current.color)
+}
+
+const edges = new WeakMap<CapsuleButton, MeshSlot>()
+
+/** Da al botón un canto fino por detrás, para que de lado no parezca infinitamente fino. */
+export function addPillEdge(btn: CapsuleButton): void {
+  const size = btn.size
+  const pts = roundedRect(size.x, size.y, Math.min(size.x, size.y) / 2)
+  const slot = new MeshSlot(btn.getSceneObject(), "Edge", TONE.secondary.color, false)
+  const b = slot.begin()
+  appendWall(b, pts, 0, -EDGE_DEPTH)
+  appendStroke(b, pts, true, BORDER_DEFAULT, -EDGE_DEPTH)
+  slot.commit()
+  edges.set(btn, slot)
 }
 
 let hintListener: ((label: string | null) => void) | null = null
