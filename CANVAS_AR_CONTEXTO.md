@@ -16,7 +16,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Un solo usuario: la conexión entre dispositivos queda fuera.
 - Guardar versiones y Snap Cloud quedan fuera por ahora.
 - Plazo: 4 días desde el 2026-11-04. Se acepta no llegar a todo.
-- La identidad visual sigue `indicaciones/design.md` en texto, selección y avisos, y `apple-brand-package/tokens.json` en lo demás. `apple-brand-package/DESIGN.md` está vacío.
+- La identidad visual sigue `indicaciones/design.md`, que Alba Anton revisó el 2026-11-07. `apple-brand-package/` queda solo como referencia, y su `DESIGN.md` está vacío.
 - El usuario se comunica en español: responde y escribe los textos de la interfaz en español.
 
 ## Guías de producto (`indicaciones/`)
@@ -25,9 +25,9 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 **Decisiones del usuario (2026-11-05), que mandan sobre las guías:**
 - Versiones (P-04 a P-06) y almacenamiento local quedan fuera por ahora; quizá se añadan más adelante. Reiniciar la Lens borra el contenido.
 - Superficie: mesa y pared.
-- Colores: siguen los tokens de `design.md`, aplicados en `CanvasTheme.ts`. `#73D8FF` es el único color de foco: selección y botones activos. `#FFD27A` para confirmaciones y avisos, `#FF9DA4` para errores. La etiqueta de un botón activo es oscura (`onAccent`, que no es de `design.md`) porque el texto principal no se lee sobre ese color. `#8FE3B0` (guardado) no se usa porque no hay guardado.
-- (2026-11-07) Alba Anton revisó `design.md` (ahora en inglés) después de aplicar esos colores. Siguen valiendo los cuatro aplicados, pero **aún no está aplicado lo nuevo**: `#C8D2DE` para texto secundario y botones secundarios, `#A0B1C5` para contornos neutros y bordes de canvas, pulsado `#59BFE8` y `#B3BFCD`, contraste mínimo de 4,5:1 y etiqueta de botón en `#F4F7FA`. Falta que el usuario decida si se aplica.
-- (2026-11-07) No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
+- Colores: aplicado el `design.md` revisado, en `CanvasTheme.ts`. Botones con fondo `#182230`, etiqueta `#F4F7FA` y el estado en el borde: `#C8D2DE` en reposo, `#73D8FF` y más grueso si está activo, `#FFD27A` en una confirmación, y al pulsar `#B3BFCD` o `#59BFE8` y aún más grueso. Canvas con `#182230` al 75 % y borde `#A0B1C5`. Avisos y errores llevan los prefijos «Aviso:» y «Error:».
+- Fuera de `design.md`: el amarillo de notas pasa a `#806a00` para llegar a 4,5:1, el ámbar pulsado es `#E0B662`, y avisos y errores llevan texto pero no icono. Sin uso porque sus funciones están fuera: `#8FE3B0` (guardado) y los colores de categoría.
+- (2026-11-07) Cambiar el tamaño queda desactivado con Mover. No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
 - Categorías, imágenes, comentarios y captura quedan fuera por ahora. No mostrar «Modo individual».
 - Voz: no intentarla por ahora. El botón Escribir con el teclado la simula. Se escribe en inglés y las limitaciones del teclado se quedan así.
 - Escribir no lleva botones Listo ni Cancelar: se termina deseleccionando.
@@ -78,8 +78,8 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
 - **Crecer con el contenido:** un rectángulo crece por el lado necesario. Las demás formas crecen lo mínimo y se desplazan lo mínimo (`fitShapeToContent`). El triángulo apoya el contenido en la base. `shapeBase` recupera el tamaño al volver a otra forma.
 - **Barra en canvas estrechos:** si el canvas es más estrecho que la barra (64 unidades, `BAR_HALF_WIDTH` en `CanvasInstance.ts`), solo se muestra en el canvas activo, para no pisar la de los vecinos.
-- **Pantalla aditiva:** los colores oscuros casi no se ven, por eso `CanvasTheme.ts` aclara los grises de la marca.
-- **UIKit:** `FlexLayout` descubre sus elementos solo y `addItems` antes de iniciarse falla. `BackPlate` en lugar de `Frame`, que salía sobredimensionado. Los colores sólidos de `CapsuleButton` se consiguen con degradados de un solo color.
+- **Contraste:** el alfa del panel (0,92) y del canvas (0,75) está elegido para que el texto llegue a 4,5:1 aunque detrás haya blanco. Medido con la fórmula WCAG, no en gafas. `BackPlate` solo ofrece grises fijos, por eso el panel lleva encima un fondo propio (`PlateFill`).
+- **UIKit:** `FlexLayout` descubre sus elementos solo y `addItems` antes de iniciarse falla. `BackPlate` en lugar de `Frame`, que salía sobredimensionado. Los colores sólidos de `CapsuleButton`, también los del borde, se consiguen con degradados de un solo color: `borderDefaultColor` no tiene efecto.
 
 ## Correcciones ya hechas (no reintroducir)
 
@@ -102,6 +102,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Mover no salta entre superficies de la misma orientación a distinta altura, como de una mesa al suelo. Es a propósito, para que no se caiga al pasar por el borde.
 - Un triángulo no puede contener un rectángulo con menos del doble de su área: es geometría, no un fallo.
 - Cambiar el tamaño solo funciona con Seleccionar: con Mover, Dibujar o Flecha, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
+- El borde de un canvas inactivo (`#A0B1C5` al 60 %) da 3,55:1 sobre `#182230`, pero baja a 2,11:1 si detrás hay blanco. En gafas, el contraste real está sin medir.
 - `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
 - En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y la barra de un canvas pequeño cerca del borde puede quedar fuera.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.

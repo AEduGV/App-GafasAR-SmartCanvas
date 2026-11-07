@@ -1,6 +1,5 @@
-// Colores de indicaciones/design.md, que mandan sobre la marca en texto, selección y avisos.
-// Las superficies siguen apple-brand-package/tokens.json (surface-tile-*): en una pantalla
-// aditiva el negro es transparente.
+// Colores de indicaciones/design.md, con su contraste medido sobre #182230 (mínimo 4,5:1 en texto).
+// En una pantalla aditiva el fondo oscuro es casi transparente: en las gafas no tapa el entorno.
 
 function hex(h: string, a: number = 1): vec4 {
   const n = parseInt(h.slice(1), 16)
@@ -12,20 +11,29 @@ export function withAlpha(c: vec4, a: number): vec4 {
 }
 
 export const COLOR = {
-  primary: hex("#73D8FF"),          // design.md, selección: también lo activo, un solo color de foco
-  text: hex("#F4F7FA"),             // design.md, texto principal
-  warning: hex("#FFD27A"),          // design.md, pendiente/aviso
-  error: hex("#FF9DA4"),            // design.md, error
-  // Etiqueta sobre un botón de color claro. No es de design.md: el texto principal no se leería encima.
-  onAccent: hex("#10242E"),
-  textMuted: hex("#cccccc"),        // body-muted
-  surface: hex("#272729"),          // surface-tile-1
-  surfaceRaised: hex("#2a2a2c"),    // surface-tile-2
-  surfaceDeep: hex("#252527"),      // surface-tile-3
-  hairline: hex("#7a7a7a"),         // ink-muted-48
-  // En pantalla aditiva los tile oscuros de la guía casi no suman luz: estos son el mismo gris neutro, más claro.
-  chip: hex("#55555a"),
-  panel: hex("#3a3a3d"),
+  text: hex("#F4F7FA"),             // texto principal
+  textMuted: hex("#C8D2DE"),        // texto secundario y pistas
+  outline: hex("#A0B1C5"),          // contorno neutro de notas y canvas
+  surface: hex("#182230"),          // fondo de referencia
+  primary: hex("#73D8FF"),          // selección y botón activo
+  primaryPressed: hex("#59BFE8"),
+  secondary: hex("#C8D2DE"),        // borde de botón secundario
+  secondaryPressed: hex("#B3BFCD"),
+  warning: hex("#FFD27A"),
+  error: hex("#FF9DA4"),
+}
+
+/** Color del borde de un botón en reposo y mientras se pulsa. */
+export interface ButtonTone {
+  color: vec4
+  pressed: vec4
+}
+
+export const TONE: Record<"secondary" | "primary" | "warning", ButtonTone> = {
+  secondary: {color: COLOR.secondary, pressed: COLOR.secondaryPressed},
+  primary: {color: COLOR.primary, pressed: COLOR.primaryPressed},
+  // design.md no define su pulsado: es el mismo ámbar, más oscuro.
+  warning: {color: COLOR.warning, pressed: hex("#E0B662")},
 }
 
 // Radios en cm: la escala de la guía (11 px y 18 px) a ~0,1 cm/px para distancia de lectura.
@@ -40,10 +48,10 @@ export interface PaletteEntry {
 }
 
 export const PALETTE: PaletteEntry[] = [
-  {name: "Grafito", stroke: hex("#ffffff"), fill: hex("#5f5f64")},
+  {name: "Grafito", stroke: hex("#F4F7FA"), fill: hex("#5f5f64")},
   {name: "Azul", stroke: hex("#2997ff"), fill: hex("#14508f")},
   {name: "Verde", stroke: hex("#30d158"), fill: hex("#1c6b35")},
-  {name: "Amarillo", stroke: hex("#ffd60a"), fill: hex("#8a7000")},
+  {name: "Amarillo", stroke: hex("#ffd60a"), fill: hex("#806a00")}, // más claro no llega a 4,5:1 con el texto
   {name: "Naranja", stroke: hex("#ff9f0a"), fill: hex("#99590a")},
   {name: "Rojo", stroke: hex("#ff453a"), fill: hex("#8f2a24")},
 ]

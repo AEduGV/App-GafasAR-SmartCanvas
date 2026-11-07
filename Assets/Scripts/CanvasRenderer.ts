@@ -23,6 +23,9 @@ const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
 const BODY_SIZE = 64
 const TITLE_SIZE = 72
+// Con este alfa, el texto sobre el canvas llega a 4,5:1 aunque detrás haya blanco.
+const SURFACE_ALPHA = 0.75
+const SCREEN_ALPHA = 0.9
 
 // Orden dentro de una capa: pantalla debajo, trazos encima.
 const KIND_Z: Record<string, number> = {screen: 0, shape: 0.5, note: 0.5, text: 0.5, stroke: 0.9}
@@ -174,14 +177,14 @@ class ElementView {
       const pts = el.kind === "text" ? roundedRect(el.w, el.h, RADIUS.small) : shapeOutline(el.shape, el.w, el.h)
       this.fill.setColor(this.fillColor(el))
       if (el.kind !== "text") appendFill(fb, pts, 0)
-      if (el.kind === "screen") appendStroke(db, pts, true, 0.1, 0.02)
+      if (el.kind === "screen" || el.kind === "note") appendStroke(db, pts, true, 0.1, 0.02)
       this.appendGateDetails(db, el)
       appendStroke(ob, pts, true, 0.28, 0.04)
       this.text.enabled = true
       this.applyText(el)
     }
 
-    this.detail.setColor(el.kind === "screen" ? COLOR.hairline : COLOR.text)
+    this.detail.setColor(el.kind === "screen" || el.kind === "note" ? COLOR.outline : COLOR.text)
     this.fill.commit()
     this.detail.commit()
     this.outline.commit()
@@ -192,7 +195,7 @@ class ElementView {
   }
 
   private fillColor(el: CanvasElement): vec4 {
-    if (el.kind === "screen") return new vec4(COLOR.panel.x, COLOR.panel.y, COLOR.panel.z, 0.9)
+    if (el.kind === "screen") return withAlpha(COLOR.surface, SCREEN_ALPHA)
     return (PALETTE[el.color] ?? PALETTE[0]).fill
   }
 
@@ -271,7 +274,7 @@ class ElementView {
 
   private refreshOutline(): void {
     this.outline.setVisible(this.selected || this.hovered)
-    this.outline.setColor(this.selected ? COLOR.primary : withAlpha(COLOR.text, 0.55))
+    this.outline.setColor(this.selected ? COLOR.primary : COLOR.outline)
   }
 
   destroy(): void {
@@ -297,7 +300,7 @@ class ConnectionView {
     this.outline.setVisible(false)
     this.handle = global.scene.createSceneObject("Handle")
     this.handle.setParent(this.root)
-    this.plate = new MeshSlot(this.handle, "Plate", COLOR.chip)
+    this.plate = new MeshSlot(this.handle, "Plate", COLOR.surface)
     this.label = makeText(this.handle, BODY_SIZE, COLOR.text)
     this.labelSo = this.label.getSceneObject()
     this.labelSo.getTransform().setLocalPosition(new vec3(0, 0, 0.12))
@@ -337,7 +340,7 @@ class ConnectionView {
     const pw = Math.max(3.2, conn.label.length * 1.1 + 1.8)
     if (hasLabel) appendFill(pb, roundedRect(pw, 2.8, 1.4), 0)
     else appendFill(pb, roundedRect(1.1, 1.1, 0.55), 0)
-    this.plate.setColor(hasLabel ? COLOR.chip : COLOR.text)
+    this.plate.setColor(hasLabel ? COLOR.surface : COLOR.text)
     this.plate.commit()
     this.label.text = conn.label
     this.label.horizontalOverflow = HorizontalOverflow.Overflow
@@ -438,12 +441,12 @@ export class CanvasRenderer {
 
   constructor(root: SceneObject, private doc: CanvasDocument) {
     this.root = root
-    this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.text, 0.1), false)
-    this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", withAlpha(COLOR.text, 0.4), false)
+    this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.surface, SURFACE_ALPHA), false)
+    this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", COLOR.outline, false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
     for (let i = 1; i < LAYER_COUNT; i++) {
-      const plane = new MeshSlot(root, "LayerPlane" + i, withAlpha(COLOR.text, 0.22), false)
+      const plane = new MeshSlot(root, "LayerPlane" + i, COLOR.outline, false)
       plane.setVisible(false)
       this.layerPlanes.push(plane)
       const label = makeText(plane.sceneObject, 39, COLOR.textMuted)

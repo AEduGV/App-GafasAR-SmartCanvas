@@ -35,8 +35,8 @@ const DOCK_LIFT_LOW = -18
 const DOCK_LIFT_HIGH = 22
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
-const BORDER_ACTIVE = withAlpha(COLOR.text, 0.8)
-const BORDER_IDLE = withAlpha(COLOR.text, 0.3)
+const BORDER_ACTIVE = COLOR.outline
+const BORDER_IDLE = withAlpha(COLOR.outline, 0.6)
 // Tiempo máximo de espera de la detección de superficie antes de usar el plano virtual.
 const CORNER_QUERY_TIMEOUT = 0.5
 // Distancia a la que el contenido se ve a escala 1. Más lejos, todo crece para seguir siendo legible.
@@ -1569,7 +1569,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private describe(el: CanvasElement): string {
     const label = el.text ? el.text.split("\n")[0] : el.kind === "stroke" ? "Trazo" : "Sin texto"
-    return label + " · capa " + (el.layer + 1)
+    return "Seleccionado: " + label + " · capa " + (el.layer + 1)
   }
 
   private toolHint(): string {

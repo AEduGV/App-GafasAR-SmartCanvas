@@ -1,14 +1,20 @@
-// Botón píldora de la identidad visual: color sólido y azul solo para lo activo.
+// Botón píldora de design.md: fondo oscuro, etiqueta en blanco frío y borde según su estado.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
 import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexItem"
 import {GradientParameters} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
-import {COLOR} from "./CanvasTheme"
+import {ButtonTone, COLOR, TONE} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
 // La etiqueta va por delante de la cara del botón para que no la tape al verla en ángulo.
 export const LABEL_Z = 0.35
+
+// Grosor del borde en cm: el pulsado se refuerza con más grosor, además de con el color.
+const BORDER_DEFAULT = 0.08
+const BORDER_ACTIVE = 0.18
+const BORDER_PRESSED = 0.26
+const HOVER_LIGHTEN = 0.08
 
 function solid(c: vec4): GradientParameters {
   return {
@@ -25,23 +31,31 @@ function lighten(c: vec4, amount: number): vec4 {
   return new vec4(Math.min(1, c.x + amount), Math.min(1, c.y + amount), Math.min(1, c.z + amount), c.w)
 }
 
-const labels = new WeakMap<CapsuleButton, Text>()
-
-export function paintPill(btn: CapsuleButton, active: boolean, accent: vec4 = COLOR.primary): void {
-  const label = labels.get(btn)
-  if (label) label.textFill.color = active ? COLOR.onAccent : COLOR.text
+/** El fondo no cambia al activarlo: el estado se lee en el color y el grosor del borde. */
+export function paintPill(btn: CapsuleButton, active: boolean, tone: ButtonTone = TONE.primary): void {
   const vis = btn.visual as RoundedRectangleVisual
   if (!vis) return
-  const base = active ? accent : COLOR.chip
+  const current = active ? tone : TONE.secondary
+  const size = active ? BORDER_ACTIVE : BORDER_DEFAULT
   vis.defaultBaseType = "Gradient"
   vis.hoveredBaseType = "Gradient"
   vis.triggeredBaseType = "Gradient"
-  vis.defaultGradient = solid(base)
-  vis.hoveredGradient = solid(lighten(base, 0.12))
-  vis.triggeredGradient = solid(active ? lighten(accent, -0.15) : COLOR.primary)
-  vis.defaultHasBorder = false
-  vis.hoveredHasBorder = false
-  vis.triggeredHasBorder = false
+  vis.defaultGradient = solid(COLOR.surface)
+  vis.hoveredGradient = solid(lighten(COLOR.surface, HOVER_LIGHTEN))
+  vis.triggeredGradient = solid(COLOR.surface)
+  vis.defaultHasBorder = true
+  vis.hoveredHasBorder = true
+  vis.triggeredHasBorder = true
+  // Como en el relleno, un color sólido solo se consigue con un degradado de un solo color.
+  vis.defaultBorderType = "Gradient"
+  vis.hoveredBorderType = "Gradient"
+  vis.triggeredBorderType = "Gradient"
+  vis.borderDefaultGradient = solid(current.color)
+  vis.borderHoveredGradient = solid(current.color)
+  vis.borderTriggeredGradient = solid(current.pressed)
+  vis.defaultBorderSize = size
+  vis.hoveredBorderSize = size
+  vis.triggeredBorderSize = BORDER_PRESSED
 }
 
 export function makePill(
@@ -68,8 +82,7 @@ export function makePill(
   t.text = label
   t.size = textSize
   t.depthTest = true
-  t.textFill.color = isActive() ? COLOR.onAccent : COLOR.text
-  labels.set(btn, t)
+  t.textFill.color = COLOR.text
   t.horizontalAlignment = HorizontalAlignment.Center
   t.verticalAlignment = VerticalAlignment.Center
   t.horizontalOverflow = HorizontalOverflow.Overflow

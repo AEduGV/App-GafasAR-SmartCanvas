@@ -7,9 +7,16 @@ import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scrip
 import {ContentVerticalAlignment} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/LayoutTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {LABEL_Z, makePill, paintPill} from "./CanvasPill"
-import {COLOR} from "./CanvasTheme"
+import {appendFill, roundedRect} from "./CanvasGeometry"
+import {MeshSlot} from "./CanvasRenderer"
+import {COLOR, TONE, withAlpha} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
+
+// BackPlate solo ofrece grises fijos. Con este alfa, el texto de error llega a 4,5:1 aunque detrás haya blanco.
+const PLATE_ALPHA = 0.92
+const PLATE_RADIUS = 1.6
+const PLATE_Z = 0.2
 
 const PANEL_W = 57
 const ROW_H = 3
@@ -122,6 +129,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   private status: Text | null = null
   private content: SceneObject | null = null
   private plate: BackPlate | null = null
+  private plateFill: MeshSlot | null = null
   private panes = new Map<string, SceneObject>()
   private buttons = new Map<string, CapsuleButton>()
   private workRows: SceneObject[] = []
@@ -143,7 +151,17 @@ export class CanvasDockUI extends BaseScriptComponent {
     plate.style = "dark"
     plate.size = new vec2(PANEL_W + 2, PANEL_H + 1.4)
     this.plate = plate
+    this.plateFill = new MeshSlot(this.sceneObject, "PlateFill", withAlpha(COLOR.surface, PLATE_ALPHA), false)
+    this.plateFill.sceneObject.getTransform().setLocalPosition(new vec3(0, 0, PLATE_Z))
     this.build(this.sceneObject)
+  }
+
+  private setPlateSize(size: vec2): void {
+    if (this.plate) this.plate.size = size
+    if (this.plateFill) {
+      appendFill(this.plateFill.begin(), roundedRect(size.x, size.y, PLATE_RADIUS), 0)
+      this.plateFill.commit()
+    }
   }
 
   private build(host: SceneObject): void {
@@ -202,7 +220,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     t.font = THEME_FONT
     t.size = STATUS_SIZE
     t.depthTest = true
-    t.textFill.color = COLOR.text
+    t.textFill.color = COLOR.textMuted
     t.horizontalAlignment = HorizontalAlignment.Center
     t.verticalAlignment = VerticalAlignment.Center
     t.horizontalOverflow = HorizontalOverflow.Overflow
@@ -237,7 +255,7 @@ export class CanvasDockUI extends BaseScriptComponent {
 
   private paint(action: string): void {
     const btn = this.buttons.get(action)
-    if (btn && btn.visual) paintPill(btn, this.activeActions.has(action), action === "delete" ? COLOR.warning : COLOR.primary)
+    if (btn && btn.visual) paintPill(btn, this.activeActions.has(action), action === "delete" ? TONE.warning : TONE.primary)
   }
 
   setActive(action: string, active: boolean): void {
@@ -258,15 +276,15 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.pendingStatus = msg
     this.pendingTone = tone
     if (!this.status) return
-    this.status.text = msg
-    this.status.textFill.color = tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.text
+    this.status.text = (tone === "warning" ? "Aviso: " : tone === "error" ? "Error: " : "") + msg
+    this.status.textFill.color = tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.textMuted
   }
 
   setPhase(phase: "place" | "work"): void {
     this.pendingPhase = phase
     if (!this.ready) return
     const working = phase === "work"
-    if (this.plate) this.plate.size = new vec2(PANEL_W + 2, working ? PANEL_H + 1.4 : COMPACT_H)
+    this.setPlateSize(new vec2(PANEL_W + 2, working ? PANEL_H + 1.4 : COMPACT_H))
     // La columna empieza arriba: en modo compacto se baja para centrar lo visible en la placa.
     const shift = working ? 0 : (PANEL_H - COMPACT_H) / 2
     this.content?.getTransform().setLocalPosition(new vec3(0, -shift, 0.6))
