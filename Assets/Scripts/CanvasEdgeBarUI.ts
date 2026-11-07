@@ -10,7 +10,7 @@ import {TONE} from "./CanvasTheme"
 const HUB_SIZE = 4.6
 const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
-// Radio de cada anillo, con las herramientas tocándose lo justo incluso si aparece Agrupar o Separar.
+// Radio de cada anillo, con las herramientas tocándose lo justo.
 export const RING_RADIUS = 10
 const SHAPE_RING_RADIUS = 14.8
 const SHAPE_STEP = 18
@@ -21,8 +21,7 @@ const ARC_END = 270
 const OPEN_TIME = 0.16
 
 export type EdgeTool = "move" | "draw" | "erase" | "write" | "arrow"
-export type EdgeExtra = "group" | "separate"
-export type EdgeAction = EdgeTool | EdgeExtra | "delete" | "shapeMenu" | "menu"
+export type EdgeAction = EdgeTool | "delete" | "shapeMenu" | "menu"
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
   {action: "move", label: "Mover", icon: ICON.open_with},
@@ -37,11 +36,6 @@ const SHAPES: {shape: CanvasShape; label: string; icon: Texture}[] = [
   {shape: "oval", label: "Óvalo", icon: ICON.circle},
   {shape: "triangle", label: "Triángulo", icon: ICON.change_history},
   {shape: "diamond", label: "Rombo", icon: ICON.diamond},
-]
-
-const EXTRAS: {action: EdgeExtra; label: string; icon: Texture}[] = [
-  {action: "group", label: "Agrupar", icon: ICON.join},
-  {action: "separate", label: "Separar", icon: ICON.ungroup},
 ]
 
 function polar(angle: number, radius: number): vec3 {
@@ -59,11 +53,9 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   private shapeButton: CapsuleButton | null = null
   private deleteButton: CapsuleButton | null = null
   private buttons = new Map<EdgeTool, CapsuleButton>()
-  private extras = new Map<EdgeExtra, CapsuleButton>()
   private shapeItems = new Map<CanvasShape, CapsuleButton>()
   // Lo que hay en el arco ahora mismo, en orden, con el ángulo que le toca.
   private slots: {so: SceneObject; angle: number}[] = []
-  private extra: EdgeExtra | null = null
   private active: EdgeTool | null = null
   private deleteArmed = false
   private shapeOpen = false
@@ -97,9 +89,6 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       this.buttons.set(def.action, this.makeItem(this.ring, def.label, def.icon, () => this.active === def.action, () => this._onAction.invoke(def.action)))
     }
     this.shapeButton = this.makeItem(this.ring, "Forma", ICON.category, () => this.shapeOpen, () => this._onAction.invoke("shapeMenu"))
-    for (const def of EXTRAS) {
-      this.extras.set(def.action, this.makeItem(this.ring, def.label, def.icon, () => false, () => this._onAction.invoke(def.action)))
-    }
     this.deleteButton = this.makeItem(this.ring, "Borrar canvas", ICON.delete, () => this.deleteArmed, () => this._onAction.invoke("delete"))
 
     this.shapeRing = global.scene.createSceneObject("ShapeRing")
@@ -120,14 +109,10 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return makePill(parent, label, ITEM_SIZE, ITEM_SIZE, TEXT_SIZE, isActive, onPress, icon)
   }
 
-  /** Reparte en el arco lo que se ve ahora: Agrupar o Separar solo cuando tienen sentido. */
+  /** Reparte las herramientas en el arco. */
   private layout(): void {
     const list: CapsuleButton[] = TOOLS.map((def) => this.buttons.get(def.action))
     list.push(this.shapeButton)
-    this.extras.forEach((btn, key) => {
-      btn.sceneObject.enabled = key === this.extra
-      if (key === this.extra) list.push(btn)
-    })
     list.push(this.deleteButton)
     const step = (ARC_END - ARC_START) / (list.length - 1)
     this.slots = list.map((btn, i) => ({so: btn.sceneObject, angle: ARC_START + step * i}))
@@ -200,12 +185,6 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     if (this.shapeRing) this.shapeRing.enabled = open
     if (this.shapeButton) paintPill(this.shapeButton, open)
     this.shapeItems.forEach((btn, shape) => paintPill(btn, shape === current))
-  }
-
-  showExtra(extra: EdgeExtra | null): void {
-    if (extra === this.extra) return
-    this.extra = extra
-    this.layout()
   }
 
   setPose(position: vec3, rotation: quat): void {

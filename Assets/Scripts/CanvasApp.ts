@@ -1,4 +1,5 @@
 // Controlador de Canvas AR: colocación, herramientas e interacción con pellizco o ratón.
+import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {Interactor, InteractorInputType} from "SpectaclesInteractionKit.lspkg/Core/Interactor/Interactor"
 import WorldCameraFinderProvider from "SpectaclesInteractionKit.lspkg/Providers/CameraProvider/WorldCameraFinderProvider"
@@ -6,11 +7,13 @@ import SIK from "SpectaclesInteractionKit.lspkg/SIK"
 import {CanvasDockUI} from "./CanvasDockUI"
 import {CanvasEdgeBarUI, EdgeAction, EdgeTool, RING_RADIUS} from "./CanvasEdgeBarUI"
 import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from "./CanvasDocument"
+import {ICON} from "./CanvasIcons"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
-import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot} from "./CanvasRenderer"
+import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
+import {makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
 type Tool = "select" | "connect" | "draw" | "erase" | "underline" | "moveCanvas"
@@ -33,6 +36,10 @@ const DRAG_PLACE_DISTANCE = 8
 // Dos canvas se consideran juntos con menos de esta separación, en unidades del canvas.
 const ADJACENT_GAP = 6
 const SNAP_GAP = 0.4
+// El botón de agrupar aparece entre dos canvas con menos de este hueco, en unidades del canvas.
+const LINK_BUTTON_GAP = 15
+const LINK_BUTTON_SIZE = 4.6
+const LINK_BUTTON_Z = 2
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
 const BORDER_ACTIVE = COLOR.outline
@@ -137,8 +144,17 @@ interface CanvasDrag {
   startDir: vec3
   /** Ya se movió: mantener pulsado dejó de ser un agarre. */
   moved: boolean
-  ball: {start: number; fullScale: number; from: vec3; distance: number; origin: vec3; dir: vec3} | null
+  ball: {start: number; fullScale: number; from: vec3; distance: number; origin: vec3; dir: vec3; travelled: boolean} | null
   surface: SurfaceHit | null
+}
+
+/** El botón que une o separa una pareja de canvas cercanos. */
+interface LinkButton {
+  a: CanvasInstance
+  b: CanvasInstance
+  root: SceneObject
+  button: CapsuleButton
+  grouped: boolean
 }
 
 interface Placing {
@@ -168,6 +184,7 @@ export class CanvasApp extends BaseScriptComponent {
   private placing: Placing | null = null
   private nextCanvasId = 1
   private nextGroupId = 1
+  private linkButtons = new Map<string, LinkButton>()
   private cursor: MeshSlot
   private ball: SceneObject
   private cornerA: MeshSlot
@@ -738,7 +755,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.renderer.setContentVisible(true)
     this.dock.setPhase("work")
     this.setTool("select")
-    this.refreshGroupOptions()
     this.dock.setStatus(
       this.canvases.length > 1
         ? "Canvas " + this.canvases.length + " listo. Enlázalo con Flecha o júntalo con otro"
@@ -794,14 +810,6 @@ export class CanvasApp extends BaseScriptComponent {
       if (!wasWritingHere) this.startWriting()
       return
     }
-    if (action === "group") {
-      this.groupWithNeighbours(canvas)
-      return
-    }
-    if (action === "separate") {
-      this.separateGroup(canvas)
-      return
-    }
     const tool: Tool = action === "move" ? "moveCanvas" : action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
     this.setTool(this.tool === tool ? "select" : tool)
   }
@@ -820,7 +828,6 @@ export class CanvasApp extends BaseScriptComponent {
   private changeShape(canvas: CanvasInstance, shape: CanvasShape): void {
     this.closeEdgeMenu()
     canvas.renderer.setShape(shape)
-    this.refreshGroupOptions()
     this.dock.setStatus(this.toolHint())
     this.log("forma " + canvas.id + " " + shape)
   }
@@ -926,7 +933,7 @@ export class CanvasApp extends BaseScriptComponent {
     drag.candidate = null
     const from = anchor.toWorld(center)
     const eye = this.camera.getWorldPosition()
-    drag.ball = {start: getTime(), fullScale, from, distance: from.distance(eye), origin: eye, dir: this.camera.back}
+    drag.ball = {start: getTime(), fullScale, from, distance: from.distance(eye), origin: eye, dir: this.camera.back, travelled: false}
     this.ball.enabled = true
     this.closeEdgeMenu()
     this.dock.setStatus("Lleva la bola adonde quieras y suelta para colocar el canvas")
@@ -938,6 +945,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (!ball) return
     ball.origin = origin
     ball.dir = dir
+    if (dir.dot(drag.startDir) < HOLD_STILL_DOT) ball.travelled = true
     // Nunca atraviesa la superficie que tiene delante.
     let distance = FLOATING_DISTANCE
     const hit = drag.surface
@@ -968,7 +976,7 @@ export class CanvasApp extends BaseScriptComponent {
     drag.ball = null
     drag.scale = ball.fullScale
     // Si no se ha llevado a ningún sitio, vuelve exactamente a donde estaba.
-    if (ball.dir.dot(drag.startDir) >= HOLD_STILL_DOT) {
+    if (!ball.travelled) {
       drag.target = ball.from
       this.applyDragPose(drag)
       return
@@ -1090,11 +1098,6 @@ export class CanvasApp extends BaseScriptComponent {
     }
   }
 
-  private areAdjacent(a: CanvasInstance, b: CanvasInstance): boolean {
-    const g = this.measureGap(a, b)
-    return !!g && g.gapX <= ADJACENT_GAP && g.gapY <= ADJACENT_GAP
-  }
-
   /** Al soltar cerca de otro canvas, los deja exactamente pegados y en el mismo plano. */
   private snapToNeighbour(moved: CanvasInstance[]): boolean {
     const anchor = moved[0]
@@ -1126,63 +1129,126 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const moved = (drag?.members ?? []).map((m) => m.canvas)
     const snapped = moved.length > 0 && this.snapToNeighbour(moved)
-    this.refreshGroupOptions()
-    const near = moved.some((c) => this.neighbours(c).length > 0)
-    this.dock.setStatus(near ? "Canvas juntos: pulsa + y luego Agrupar para moverlos a la vez" : this.toolHint())
+    const near = this.canvases.some(
+      (c) => moved.indexOf(c) < 0 && c.placed && moved.some((m) => !this.isGrouped(m, c) && this.linkButtonGap(m, c))
+    )
+    this.dock.setStatus(near ? "Canvas juntos: pulsa el botón entre ellos para agruparlos" : this.toolHint())
     this.log("canvas movido" + (snapped ? " y pegado" : ""))
   }
 
-  /** Canvas pegados a este que todavía no están en su grupo. */
-  private neighbours(canvas: CanvasInstance): CanvasInstance[] {
-    return this.canvases.filter(
-      (o) =>
-        o !== canvas &&
-        o.placed &&
-        (!canvas.groupId || o.groupId !== canvas.groupId) &&
-        this.areAdjacent(canvas, o)
+  private linkButtonGap(a: CanvasInstance, b: CanvasInstance): boolean {
+    const g = this.measureGap(a, b)
+    return !!g && g.gapX <= LINK_BUTTON_GAP && g.gapY <= LINK_BUTTON_GAP
+  }
+
+  /** Centro del hueco entre dos canvas o, si se solapan en un eje, de la parte compartida. */
+  private linkPoint(a: CanvasInstance, b: CanvasInstance): vec3 {
+    const ab = a.renderer.getBounds()
+    const bb = b.renderer.getBounds()
+    const corners = [new vec3(bb.minX, bb.minY, 0), new vec3(bb.maxX, bb.maxY, 0)].map((p) => a.toLocal(b.toWorld(p)))
+    const between = (min0: number, max0: number, p: number, q: number): number =>
+      (Math.max(min0, Math.min(p, q)) + Math.min(max0, Math.max(p, q))) / 2
+    const x = between(ab.minX, ab.maxX, corners[0].x, corners[1].x)
+    const y = between(ab.minY, ab.maxY, corners[0].y, corners[1].y)
+    return a.toWorld(new vec3(x, y, LINK_BUTTON_Z))
+  }
+
+  private isGrouped(a: CanvasInstance, b: CanvasInstance): boolean {
+    return a.groupId !== null && a.groupId === b.groupId
+  }
+
+  private makeLinkButton(a: CanvasInstance, b: CanvasInstance): LinkButton {
+    const root = global.scene.createSceneObject("LinkButton")
+    root.setParent(this.sceneObject)
+    root.createComponent("Component.Canvas")
+    const entry: LinkButton = {a, b, root, grouped: false, button: null}
+    entry.button = makePill(
+      root,
+      "Agrupar o separar",
+      LINK_BUTTON_SIZE,
+      LINK_BUTTON_SIZE,
+      56,
+      () => entry.grouped,
+      () => this.toggleGroup(entry.a, entry.b),
+      ICON.join
     )
+    return entry
   }
 
-  private refreshGroupOptions(): void {
-    for (const c of this.canvases) {
-      if (!c.bar) continue
-      c.bar.showExtra(this.neighbours(c).length > 0 ? "group" : c.groupId ? "separate" : null)
-    }
-  }
-
-  /** Reúne este canvas y todo lo que esté pegado a él, directa o indirectamente. */
-  private groupWithNeighbours(canvas: CanvasInstance): void {
-    const cluster = new Set<CanvasInstance>(this.groupMembers(canvas))
-    const pending = Array.from(cluster)
-    while (pending.length > 0) {
-      const current = pending.pop()
-      for (const other of this.neighbours(current)) {
-        for (const member of this.groupMembers(other)) {
-          if (!cluster.has(member)) {
-            cluster.add(member)
-            pending.push(member)
+  /** Cada pareja de canvas cercanos tiene su botón, justo entre los dos y mirando como ellos. */
+  private updateLinkButtons(): void {
+    const held = this.press?.drag?.ball ? this.press.drag.members.map((m) => m.canvas) : []
+    const live = new Set<string>()
+    if (this.phase === "work") {
+      for (let i = 0; i < this.canvases.length; i++) {
+        for (let j = i + 1; j < this.canvases.length; j++) {
+          const a = this.canvases[i]
+          const b = this.canvases[j]
+          if (!a.placed || !b.placed || held.indexOf(a) >= 0 || held.indexOf(b) >= 0) continue
+          if (this.menuCanvas === a || this.menuCanvas === b || !this.linkButtonGap(a, b)) continue
+          const key = a.id + "|" + b.id
+          live.add(key)
+          let entry = this.linkButtons.get(key)
+          if (!entry) {
+            entry = this.makeLinkButton(a, b)
+            this.linkButtons.set(key, entry)
+          }
+          entry.root.enabled = true
+          const t = entry.root.getTransform()
+          const k = (a.scale + b.scale) / 2
+          t.setWorldPosition(this.linkPoint(a, b))
+          t.setWorldRotation(a.transform.getWorldRotation())
+          t.setWorldScale(new vec3(k, k, k))
+          const grouped = this.isGrouped(a, b)
+          if (grouped !== entry.grouped) {
+            entry.grouped = grouped
+            paintPill(entry.button, grouped)
+            setPillIcon(entry.button, grouped ? ICON.ungroup : ICON.join)
           }
         }
       }
     }
-    if (cluster.size < 2) {
-      this.dock.setStatus("Junta este canvas con otro para poder agruparlos")
-      return
-    }
-    const gid = "canvasGroup_" + this.nextGroupId++
-    cluster.forEach((c) => {
-      c.groupId = gid
+    this.linkButtons.forEach((entry, key) => {
+      if (live.has(key)) return
+      if (this.canvases.indexOf(entry.a) < 0 || this.canvases.indexOf(entry.b) < 0) {
+        this.linkButtons.delete(key)
+        retire(entry.root)
+      } else {
+        entry.root.enabled = false
+      }
     })
-    this.refreshGroupOptions()
-    this.dock.setStatus(cluster.size + " canvas agrupados: Mover los lleva juntos")
-    this.log("grupo " + gid + " con " + cluster.size)
   }
 
-  private separateGroup(canvas: CanvasInstance): void {
-    for (const c of this.groupMembers(canvas)) c.groupId = null
-    this.refreshGroupOptions()
-    this.dock.setStatus("Grupo separado")
-    this.log("grupo separado")
+  /** Pulsar este botón nunca debe contar como pulsar fuera, aunque SIK aún no lo tenga apuntado. */
+  private rayHitsLinkButton(origin: vec3, dir: vec3): boolean {
+    let hit = false
+    this.linkButtons.forEach((entry) => {
+      if (hit || !entry.root.enabled) return
+      const t = entry.root.getTransform()
+      const center = t.getWorldPosition()
+      const p = this.intersectPlane(origin, dir, center, t.forward)
+      if (p && p.distance(center) <= (LINK_BUTTON_SIZE / 2) * t.getWorldScale().x) hit = true
+    })
+    return hit
+  }
+
+  private toggleGroup(a: CanvasInstance, b: CanvasInstance): void {
+    this.closeEdgeMenu()
+    this.dock.closeMenu()
+    if (this.editing) this.finishEditing()
+    if (this.isGrouped(a, b)) {
+      for (const c of this.groupMembers(a)) c.groupId = null
+      this.dock.setStatus("Grupo separado")
+      this.log("grupo separado")
+      return
+    }
+    const members = new Set<CanvasInstance>([...this.groupMembers(a), ...this.groupMembers(b)])
+    const gid = "canvasGroup_" + this.nextGroupId++
+    members.forEach((c) => {
+      c.groupId = gid
+    })
+    this.dock.setStatus(members.size + " canvas agrupados: Mover los lleva juntos")
+    this.log("grupo " + gid + " con " + members.size)
   }
 
   /** Un canvas vacío se borra a la primera; con contenido, la X pide una segunda pulsación. */
@@ -1245,8 +1311,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (this.active === canvas) this.active = this.canvases[this.canvases.length - 1]
       canvas.destroy()
       this.refreshBorders()
-      this.refreshGroupOptions()
-      this.dock.setStatus("Canvas borrado")
+        this.dock.setStatus("Canvas borrado")
     }
     this.log("canvas borrado " + id + " (quedan " + this.canvases.filter((c) => c.placed).length + ")")
   }
@@ -1350,7 +1415,7 @@ export class CanvasApp extends BaseScriptComponent {
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
     const pressRay = this.activeRay(interactor)
-    if (pressRay && this.rayHitsDock(pressRay.origin, pressRay.dir)) return
+    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir))) return
     if (this.dock.closeMenu()) return
 
     const wasEditing = this.editing !== null
@@ -1477,7 +1542,6 @@ export class CanvasApp extends BaseScriptComponent {
       this.clearSelection()
       return
     }
-    this.refreshGroupOptions()
     const b = this.renderer.getBounds()
     this.log("canvas " + this.active.id + " redimensionado a " + (b.maxX - b.minX).toFixed(1) + "x" + (b.maxY - b.minY).toFixed(1))
   }
@@ -1538,6 +1602,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private update(): void {
     flushRetired()
+    this.updateLinkButtons()
     this.updateDeleteState()
     this.updateFlip()
     if (this.phase === "place") {
