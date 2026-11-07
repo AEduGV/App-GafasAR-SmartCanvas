@@ -50,7 +50,8 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 - **Formas:** Rectángulo, Óvalo, Triángulo y Rombo, en el segundo arco del menú radial. Dibujo, clics y flechas respetan la forma real.
 - **Varios canvas:** flechas entre ellos que siguen a sus canvas, y Agrupar al juntarlos para moverlos a la vez.
 - **Borrar un canvas (papelera del menú radial):** directo si está vacío; con contenido pide una segunda pulsación en 3 segundos.
-- **Panel principal:** notas, texto, pantallas, figuras, diagramas de flujo, puertas lógicas, marcadores, stickers, plantillas, capas, agrupar elementos, conectar bloques.
+- **Menú principal, pegado a la vista:** un botón fijo en la esquina superior izquierda de la franja visible abre y cierra un panel plano debajo de él, que sigue a la cámara. Tiene notas, texto, pantallas, figuras, diagramas de flujo, puertas lógicas, marcadores, stickers, plantillas, capas, agrupar elementos y conectar bloques. Al colocar un canvas solo muestra Horizontal, Vertical, Colocar delante y Cancelar. Empieza cerrado. Sigue abierto al cambiar de pestaña, color, grosor, capa, orientación o Varios, y con Borrar y Vaciar (que piden confirmar). Se cierra con lo demás, al pulsar fuera (que no hace nada más), o al usar un menú radial.
+- **Línea de estado:** junto a ese botón, siempre visible y ajustada al mensaje. Ahí salen las indicaciones, los avisos y el nombre del botón apuntado.
 
 ## Pendiente de la especificación
 
@@ -66,10 +67,10 @@ Imágenes, comentarios, captura y alineación con objetos físicos. Nada de esto
 | `CanvasRenderer.ts` | Dibuja el documento y la superficie. Forma, límites y `retire()` para destruir objetos |
 | `CanvasGeometry.ts` | Contornos, rellenos, trazos y tubos con `MeshBuilder` |
 | `CanvasLinks.ts` | Flechas entre canvas: guardan quién enlaza con quién y se recalculan según las poses |
-| `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit: panel, menú radial de cada canvas (conserva el nombre de cuando era una barra) y botones |
+| `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit: botón, estado y menú pegados a la vista, menú radial de cada canvas (conserva el nombre de cuando era una barra) y botones |
 | `CanvasTemplates.ts`, `CanvasTheme.ts`, `CanvasIcons.ts` | Plantillas, colores e iconos |
 
-La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`. Los canvas y sus menús radiales se crean en ejecución.
+La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`, que al arrancar pasa a ser hijo de la cámara. Los canvas y sus menús radiales se crean en ejecución.
 
 ## Decisiones que no hay que deshacer
 
@@ -80,6 +81,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - **Destruir objetos:** usar `retire()`, nunca `destroy()` directo en algo con `Interactable`. El cursor de SIK guarda objetos en caché y lanza "Object is null" si ya no existen. Además, borrar un canvas se aplaza fuera del evento de su propio botón.
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
 - **Crecer con el contenido:** un rectángulo crece por el lado necesario. Las demás formas crecen lo mínimo y se desplazan lo mínimo (`fitShapeToContent`). El triángulo apoya el contenido en la base. `shapeBase` recupera el tamaño al volver a otra forma.
+- **Menú pegado a la vista (2026-11-07):** a petición del usuario, sustituye al panel que flotaba en el mundo. Es hijo de la cámara, plano y mirando hacia ella, a 50 cm para que ningún canvas se interponga. Se escala para verse como un panel a 105 cm. No usa una cámara ortográfica de pantalla porque SIK apunta con colisionadores en el mundo. Todo se coloca en la esquina de la franja visible de la Preview, medida en `CanvasDockUI.ts`.
 - **Arco del menú radial:** semicírculo hacia el interior del canvas (`ARC_START` y `ARC_END` en `CanvasEdgeBarUI.ts`), confirmado por el usuario el 2026-11-07, y el + dentro de la esquina (`HUB_INSET`). Un círculo completo o el + por fuera se cortan con la franja visible de la Preview en un canvas normal, que llega casi a su límite. Sobre una mesa se inclina 40° y se eleva: plano se hundiría en la superficie.
 - **Añadir un icono:** bajar el SVG `symbols/web/<nombre>/materialsymbolsrounded/<nombre>_wght600_48px.svg` de la revisión anotada en `THIRD_PARTY_NOTICES.md`, añadirle `fill="#ffffff"`, copiarlo a `Assets/Icons/`, convertirlo con `ConvertSvgToTexture` a 128 px, borrar el SVG y añadirlo a `CanvasIcons.ts`. Los botones de solo icono se pintan con `Component.Image` y el material `Image.mat` de UIKit.
 - **Git LFS (2026-11-07):** el repositorio sigue el `.gitattributes` de Lens Studio, así que imágenes, fuentes y paquetes de `Assets/` y `Packages/` van en LFS. Basta con un `git add` normal, sin ningún paso especial. Clonar sin Git LFS instalado da archivos de texto en lugar de binarios. Alba no abre el proyecto en su ordenador: solo edita documentos en GitHub.
@@ -89,7 +91,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 ## Correcciones ya hechas (no reintroducir)
 
 - El canvas no terminaba al segundo clic: la superficie recién creada se tomaba por una pulsación en el panel.
-- El panel tapaba mesas y canvas: es compacto al colocar, y elige el lado que menos tapa.
+- El panel tapaba mesas y canvas: ahora está cerrado salvo que se abra con su botón.
 - Letras de los botones cortadas: `LABEL_Z = 0.35`.
 - Clic fuera demasiado sensible: el margen se limita a la zona real del menú radial (`onEdgeBar`).
 - Excepciones del cursor al borrar: se resuelve con `retire()`.
@@ -105,13 +107,15 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Marcar o soltar sobre el canto de un objeto orienta el canvas según esa cara. Se corrige moviéndolo.
 - Mover no salta entre superficies de la misma orientación a distinta altura, como de una mesa al suelo. Es a propósito, para que no se caiga al pasar por el borde.
 - Un triángulo no puede contener un rectángulo con menos del doble de su área: es geometría, no un fallo.
-- Cambiar el tamaño solo funciona con Seleccionar: con otra herramienta, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
+- Cambiar el tamaño solo funciona con Seleccionar: con otra herramienta, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el menú abierto, el botón de menú o la línea de estado tapan un borde, ese borde no se puede agarrar.
 - El borde de un canvas inactivo (`#A0B1C5` al 60 %) da 3,55:1 sobre `#182230`, pero baja a 2,11:1 si detrás hay blanco. En gafas, el contraste real está sin medir.
 - `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
 - En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y el menú radial de un canvas cerca del borde puede quedar fuera. El + cubre la parte interior de la esquina superior derecha: para cambiar el tamaño desde ella, hay que agarrar por fuera. Sobre una mesa, el menú se ve pequeño e inclinado, y queda en la esquina lejana porque no se adapta a quien mira desde el otro lado.
+- El rayo de SIK llega a 500 cm: un canvas colocado más lejos, como la pared del fondo de Evening Room desde la cámara por defecto, se ve pero no responde.
+- Abierto, el menú tapa la parte alta de la vista, y con ella el + de un canvas alto: hay que cerrarlo para llegar a este. En gafas no se ha visto: su posición está medida para la franja de la Preview.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
-- Sin probar con el ratón real (todo lo hecho el 2026-11-07 se probó con clics simulados): el nombre del botón al apuntarlo, y que tras elegir una herramienta del menú radial mover el cursor fuera del canvas no empiece otro, que en la simulación sí ocurre.
-- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; Agrupar y Separar en el menú radial; cerrar el menú pulsando fuera; la goma en otras capas o sobre una mesa.
+- Sin probar con el ratón real (todo lo hecho el 2026-11-07 se probó con clics simulados): el menú pegado a la vista, el nombre del botón al apuntarlo, y que tras elegir una herramienta del menú radial mover el cursor fuera del canvas no empiece otro, que en la simulación sí ocurre.
+- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; Agrupar y Separar en el menú radial; cerrar el menú radial pulsando fuera; el menú principal abierto mientras se escribe, o sobre una mesa; la goma en otras capas o sobre una mesa.
 
 ## Cómo probar sin romper nada
 
@@ -123,6 +127,7 @@ Particularidades de los clics simulados, que pueden parecer fallos sin serlo:
 
 - Un `touch move` a un sitio nuevo dispara un `onTriggerStart` fantasma con el objetivo anterior y el rayo ya en el punto nuevo. Si el objetivo anterior era un botón no pasa nada, pero si era la superficie y el punto está fuera, empieza otro canvas. Tras cerrarse un menú, no hacer un `touch move` suelto fuera del canvas.
 - No generan hover. Para pulsar de forma fiable: `touch move` dos veces en el punto, `touch start` + `end` (solo actualiza el objetivo), y otro `touch start` + `end` (pulsa de verdad). Para arrastrar, ese segundo `start` va seguido de los `move` y el `end`.
+- Encadenar dos pulsaciones sobre botones distintos en un mismo envío puede perder la segunda: mejor un envío por pulsación, salvo en las de doble confirmación.
 - Entre dos llamadas pasan segundos: las dobles pulsaciones con plazo, como Borrar, deben ir en un mismo envío. Dos pulsaciones sobre un elemento cuentan como doble clic y abren la edición.
 - Tras marcar la primera esquina hay que dejar unos 500 ms, porque la consulta de superficie es asíncrona.
 - La renovación del token de sesión de Lens Studio reinicia la Lens. Si una prueba pierde su estado, mirar el log (`OAuthController ... refreshTokens`) y repetir la secuencia.
@@ -148,4 +153,5 @@ Alba Anton también sube a `main` desde la web de GitHub: haz `git fetch` antes 
 - Si Mover, Flecha y Subrayar deben dejar de iniciar otro canvas al pulsar fuera, como ya hacen Dibujar y la goma.
 - Si añadir Deshacer. No existe, así que lo borrado, también con la goma, no se recupera.
 - Si la goma debe respetar subrayados y líneas de vida de la plantilla de secuencia.
+- Si el botón de menú y la línea de estado deben ir en otro sitio en gafas, cuya zona visible no se ha medido.
 - Si cambiar los iconos menos claros: Lógica, Rombo y Decisión, Agrupar, Colocar de nuevo, Colocar delante, Horizontal y Vertical.

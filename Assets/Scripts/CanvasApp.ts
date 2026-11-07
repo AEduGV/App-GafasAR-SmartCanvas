@@ -33,9 +33,6 @@ const DRAG_PLACE_DISTANCE = 8
 // Dos canvas se consideran juntos con menos de esta separación, en unidades del canvas.
 const ADJACENT_GAP = 6
 const SNAP_GAP = 0.4
-const DOCK_DISTANCE = 105
-const DOCK_LIFT_LOW = -18
-const DOCK_LIFT_HIGH = 22
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
 const BORDER_ACTIVE = COLOR.outline
@@ -321,7 +318,9 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private start(): void {
-    this.camera = WorldCameraFinderProvider.getInstance().getComponent().getTransform()
+    const camera = WorldCameraFinderProvider.getInstance().getComponent()
+    this.camera = camera.getTransform()
+    this.dock.attachToView(camera.getSceneObject())
 
     this.links = new CanvasLinks(this.sceneObject)
     this.linkRubber = new MeshSlot(this.sceneObject, "LinkRubber", COLOR.primary)
@@ -450,7 +449,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.dock.setPhase("place")
     this.syncPlacementButtons()
     this.dock.setStatus("Pellizca una esquina del canvas sobre una mesa o una pared")
-    this.placeDockForCanvas()
   }
 
   /** Pulsar fuera de los canvas empieza otro; los que ya existen no se tocan. */
@@ -513,7 +511,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.phase = "work"
     this.refreshBorders()
     this.dock.setPhase("work")
-    this.placeDockForCanvas()
     this.dock.setStatus(this.toolHint())
     this.log("colocacion cancelada")
   }
@@ -681,7 +678,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.cursor.setVisible(false)
     this.renderer.setContentVisible(true)
     this.dock.setPhase("work")
-    this.placeDockForCanvas()
     this.setTool("select")
     this.refreshGroupOptions()
     this.dock.setStatus(
@@ -708,6 +704,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.dock.setStatus("Termina de colocar el canvas o pulsa Cancelar")
       return
     }
+    this.dock.closeMenu()
     const wasWritingHere = this.editing !== null && canvas === this.active
     const wasOpen = this.menuCanvas === canvas
     if (this.editing) this.finishEditing()
@@ -765,7 +762,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.closeEdgeMenu()
     canvas.renderer.setShape(shape)
     this.refreshGroupOptions()
-    this.placeDockForCanvas()
     this.dock.setStatus(this.toolHint())
     this.log("forma " + canvas.id + " " + shape)
   }
@@ -982,7 +978,6 @@ export class CanvasApp extends BaseScriptComponent {
     const moved = (drag?.members ?? []).map((m) => m.canvas)
     const snapped = moved.length > 0 && this.snapToNeighbour(moved)
     this.refreshGroupOptions()
-    this.placeDockForCanvas()
     const near = moved.some((c) => this.neighbours(c).length > 0)
     this.dock.setStatus(near ? "Canvas juntos: pulsa + y luego Agrupar para moverlos a la vez" : this.toolHint())
     this.log("canvas movido" + (snapped ? " y pegado" : ""))
@@ -1102,7 +1097,6 @@ export class CanvasApp extends BaseScriptComponent {
       canvas.destroy()
       this.refreshBorders()
       this.refreshGroupOptions()
-      this.placeDockForCanvas()
       this.dock.setStatus("Canvas borrado")
     }
     this.log("canvas borrado " + id + " (quedan " + this.canvases.filter((c) => c.placed).length + ")")
@@ -1125,57 +1119,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Pulsar el panel nunca debe marcar una esquina, aunque SIK aún no lo tenga apuntado. */
   private rayHitsDock(origin: vec3, dir: vec3): boolean {
-    const t = this.dock.getTransform()
-    const center = t.getWorldPosition()
-    const normal = t.forward
-    const p = this.intersectPlane(origin, dir, center, normal)
-    if (!p) return false
-    const d = p.sub(center)
-    return Math.abs(d.dot(t.right)) < 33 && Math.abs(d.dot(t.up)) < this.dock.halfHeight
-  }
-
-  /** Cuántos puntos de los canvas y sus botones quedarían tapados con el panel a esa altura. */
-  private dockOverlap(lift: number): number {
-    const center = this.viewPoint(DOCK_DISTANCE, lift)
-    const facing = this.flatForward().uniformScale(-1)
-    const right = vec3.up().cross(facing).normalize()
-    const eye = this.camera.getWorldPosition()
-    let covered = 0
-    for (const c of this.canvases) {
-      if (!c.placed && c !== this.active) continue
-      const b = c.renderer.getBounds()
-      const samples: vec3[] = []
-      for (let x = 0; x <= 4; x++) {
-        for (let y = 0; y <= 5; y++) {
-          // La última fila cae a la altura del botón +.
-          const ly = y === 5 ? b.maxY + 3 : b.minY + ((b.maxY - b.minY) * y) / 4
-          samples.push(c.toWorld(new vec3(b.minX + ((b.maxX - b.minX) * x) / 4, ly, 0)))
-        }
-      }
-      for (const p of samples) {
-        const q = this.intersectPlane(eye, p.sub(eye).normalize(), center, facing)
-        if (!q) continue
-        const d = q.sub(center)
-        if (Math.abs(d.dot(right)) < 33 && Math.abs(d.dot(vec3.up())) < this.dock.halfHeight) covered++
-      }
-    }
-    return covered
-  }
-
-  /** El panel se mantiene a distancia de lectura, en el lado de la vista que menos canvas tapa. */
-  private placeDockForCanvas(): void {
-    let lift = 25 // mientras se coloca un canvas sube a lo alto para dejar libres mesas y paredes
-    if (this.phase === "work") {
-      const below = this.dockOverlap(DOCK_LIFT_LOW)
-      const above = this.dockOverlap(DOCK_LIFT_HIGH)
-      if (below === above) {
-        const center = this.flipToPos && this.flipTo ? this.flipToPos : this.active.transform.getWorldPosition()
-        lift = center.sub(this.camera.getWorldPosition()).dot(this.camera.up) > 0 ? DOCK_LIFT_LOW : DOCK_LIFT_HIGH
-      } else {
-        lift = below < above ? DOCK_LIFT_LOW : DOCK_LIFT_HIGH
-      }
-    }
-    this.dock.setPose(this.viewPoint(DOCK_DISTANCE, lift), quat.lookAt(this.flatForward().uniformScale(-1), vec3.up()))
+    return this.dock.hitsRay(origin, dir)
   }
 
   /** Pose cómoda para cada orientación: una mesa por debajo de la vista, una pared de frente. */
@@ -1207,7 +1151,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.flipCanvas = this.active
     this.flipToPos = this.comfortableCenter(next)
     this.flipStart = getTime()
-    this.placeDockForCanvas()
     this.log("giro a " + next)
   }
 
@@ -1232,6 +1175,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (target && !this.resolveTarget(target)) return
       const ray = this.activeRay(interactor)
       if (!ray || this.rayHitsDock(ray.origin, ray.dir)) return
+      if (this.dock.closeMenu()) return
       if (!this.corner) {
         if (this.cornerQuery) return
         this.queryFirstCorner(ray.origin, ray.dir)
@@ -1256,6 +1200,9 @@ export class CanvasApp extends BaseScriptComponent {
 
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
+    const pressRay = this.activeRay(interactor)
+    if (pressRay && this.rayHitsDock(pressRay.origin, pressRay.dir)) return
+    if (this.dock.closeMenu()) return
 
     const wasEditing = this.editing !== null
     if (wasEditing) this.finishEditing()
@@ -1382,7 +1329,6 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     this.refreshGroupOptions()
-    this.placeDockForCanvas()
     const b = this.renderer.getBounds()
     this.log("canvas " + this.active.id + " redimensionado a " + (b.maxX - b.minX).toFixed(1) + "x" + (b.maxY - b.minY).toFixed(1))
   }
@@ -2077,7 +2023,6 @@ export class CanvasApp extends BaseScriptComponent {
         this.corner = null
         this.cornerA.setVisible(false)
         this.canvasRoot.enabled = false
-        this.placeDockForCanvas()
         break
       case "quick":
         this.quickPlace()
@@ -2222,9 +2167,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Un canvas pequeño crece lo justo para contener lo que se le añade. */
   private growAround(id: string): void {
-    const before = this.renderer.getBounds()
     this.renderer.growToFit(id)
-    if (this.renderer.getBounds() !== before) this.placeDockForCanvas()
   }
 
   private groupSelection(): void {
@@ -2296,7 +2239,6 @@ export class CanvasApp extends BaseScriptComponent {
         minY: cy - Math.max(h, 48) / 2,
         maxY: cy + Math.max(h, 48) / 2,
       })
-      this.placeDockForCanvas()
     }
     applyTemplate(this.doc, name, this.renderer.getBounds())
     this.doc.elements.forEach((el) => this.renderer.growToFit(el.id))

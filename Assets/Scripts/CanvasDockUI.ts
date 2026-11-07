@@ -1,4 +1,5 @@
-// Panel de herramientas. Solo expone acciones como texto y pinta el estado que le envían.
+// Botón de menú, línea de estado y panel de herramientas, pegados a la vista como una capa plana.
+// Solo expone acciones como texto y pinta el estado que le envían.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
 import {BackPlate} from "SpectaclesUIKit.lspkg/Scripts/BackPlate"
 import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexItem"
@@ -7,7 +8,7 @@ import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scrip
 import {ContentVerticalAlignment} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/LayoutTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {ICON} from "./CanvasIcons"
-import {LABEL_Z, makePill, paintPill, setPillHintListener} from "./CanvasPill"
+import {LABEL_Z, makePill, paintPill, setPillHintListener, setPillIcon} from "./CanvasPill"
 import {appendFill, roundedRect} from "./CanvasGeometry"
 import {MeshSlot} from "./CanvasRenderer"
 import {COLOR, TONE, withAlpha} from "./CanvasTheme"
@@ -21,14 +22,33 @@ const PLATE_Z = 0.2
 
 const PANEL_W = 57
 const ROW_H = 3
-const PANEL_H = ROW_H * 5 + 2.2
+const PANEL_H = ROW_H * 4 + 1.6
 const BTN_H = 2.6
 const GAP = 0.5
 
 const BUTTON_SIZE = 39
 const STATUS_SIZE = 41
-// Al colocar el canvas solo se ve el estado y una fila: el panel no debe tapar mesas ni paredes.
-const COMPACT_H = ROW_H * 2 + 2.4
+// Al colocar el canvas el panel solo tiene una fila.
+const COMPACT_H = ROW_H + 1.6
+
+// Lo más cerca posible sin molestar, para que ningún canvas se interponga. Las medidas de este archivo
+// son las de un panel a VIEW_REFERENCE cm, y se escalan para verse igual de grandes a esta distancia.
+const VIEW_DISTANCE = 50
+const VIEW_REFERENCE = 105
+// Esquina superior izquierda de la franja donde la Preview muestra lo virtual, en esas medidas.
+const TOGGLE_SIZE = 4.4
+const TOGGLE_X = -27
+const TOGGLE_Y = 31
+const STATUS_H = 3.4
+const STATUS_LEFT = TOGGLE_X + TOGGLE_SIZE / 2 + 0.6
+const STATUS_MAX_W = 29.5 - STATUS_LEFT
+const STATUS_PAD = 1.2
+// Anchura aproximada por carácter: la placa se ajusta al mensaje para tapar lo menos posible.
+const STATUS_CHAR_W = 0.5
+const MENU_TOP = TOGGLE_Y - TOGGLE_SIZE / 2 - 0.8
+
+// Tras estas acciones el menú sigue abierto: llevan a otro botón del menú o piden una segunda pulsación.
+const KEEP_OPEN = new Set(["tab", "width", "color", "layer", "orient", "multi", "delete", "clear"])
 
 export type StatusTone = "normal" | "warning" | "error"
 
@@ -131,6 +151,10 @@ const PLACEMENT: ButtonDef[] = [
 export class CanvasDockUI extends BaseScriptComponent {
   private _onAction = new Event<string>()
   private status: Text | null = null
+  private statusPlate: MeshSlot | null = null
+  private menu: SceneObject | null = null
+  private toggle: CapsuleButton | null = null
+  private opened = false
   private content: SceneObject | null = null
   private plate: BackPlate | null = null
   private plateFill: MeshSlot | null = null
@@ -152,13 +176,63 @@ export class CanvasDockUI extends BaseScriptComponent {
   onAwake(): void {
     setPillHintListener((label) => this.showHint(label))
     this.sceneObject.createComponent("Component.Canvas")
-    const plate = this.sceneObject.createComponent(BackPlate.getTypeName()) as BackPlate
+    this.makeStatus()
+    this.makeToggle()
+
+    const menu = global.scene.createSceneObject("Menu")
+    menu.setParent(this.sceneObject)
+    this.menu = menu
+    const plate = menu.createComponent(BackPlate.getTypeName()) as BackPlate
     plate.style = "dark"
     plate.size = new vec2(PANEL_W + 2, PANEL_H + 1.4)
     this.plate = plate
-    this.plateFill = new MeshSlot(this.sceneObject, "PlateFill", withAlpha(COLOR.surface, PLATE_ALPHA), false)
+    this.plateFill = new MeshSlot(menu, "PlateFill", withAlpha(COLOR.surface, PLATE_ALPHA), false)
     this.plateFill.sceneObject.getTransform().setLocalPosition(new vec3(0, 0, PLATE_Z))
-    this.build(this.sceneObject)
+    this.build(menu)
+  }
+
+  /** Queda fijo a la cámara: mirando hacia ella, sin perspectiva y a la misma distancia aunque se mueva. */
+  attachToView(camera: SceneObject): void {
+    this.sceneObject.setParent(camera)
+    const t = this.sceneObject.getTransform()
+    t.setLocalPosition(new vec3(0, 0, -VIEW_DISTANCE))
+    t.setLocalRotation(quat.quatIdentity())
+    t.setLocalScale(vec3.one().uniformScale(VIEW_DISTANCE / VIEW_REFERENCE))
+  }
+
+  /** Devuelve si estaba abierto. */
+  closeMenu(): boolean {
+    const was = this.opened
+    this.setOpen(false)
+    return was
+  }
+
+  private setOpen(open: boolean): void {
+    this.opened = open
+    if (this.menu) this.menu.enabled = open
+    if (this.toggle) setPillIcon(this.toggle, open ? ICON.close : ICON.menu)
+    this.setActive("menu", open)
+    // Un botón que desaparece bajo el cursor no avisa de que ya no se le apunta.
+    if (!open) this.showHint(null)
+  }
+
+  private makeToggle(): void {
+    const btn = makePill(
+      this.sceneObject,
+      "Menú",
+      TOGGLE_SIZE,
+      TOGGLE_SIZE,
+      BUTTON_SIZE,
+      () => this.opened,
+      () => {
+        this.setOpen(!this.opened)
+        this._onAction.invoke("menu")
+      },
+      ICON.menu
+    )
+    btn.getSceneObject().getTransform().setLocalPosition(new vec3(TOGGLE_X, TOGGLE_Y, 0.6))
+    this.toggle = btn
+    this.buttons.set("menu", btn)
   }
 
   private setPlateSize(size: vec2): void {
@@ -195,7 +269,6 @@ export class CanvasDockUI extends BaseScriptComponent {
       return so
     }
 
-    this.status = this.makeStatus(addSlot("Status", ROW_H + 0.6))
     const toolsSlot = addSlot("Tools", ROW_H)
     const tabsSlot = addSlot("Tabs", ROW_H)
     const paneSlot = addSlot("Pane", ROW_H)
@@ -212,25 +285,43 @@ export class CanvasDockUI extends BaseScriptComponent {
 
     this.ready = true
     this.setActive("tab:crear", true)
-    this.setStatus(this.pendingStatus, this.pendingTone)
     this.setPhase(this.pendingPhase)
     this.activeActions.forEach((a) => this.paint(a))
+    this.setOpen(false)
   }
 
-  private makeStatus(parent: SceneObject): Text {
+  private makeStatus(): void {
+    const root = global.scene.createSceneObject("Status")
+    root.setParent(this.sceneObject)
+    root.getTransform().setLocalPosition(new vec3(STATUS_LEFT, TOGGLE_Y, 0.2))
+    this.statusPlate = new MeshSlot(root, "StatusPlate", withAlpha(COLOR.surface, PLATE_ALPHA), false)
+
     const so = global.scene.createSceneObject("StatusText")
-    so.setParent(parent)
-    so.getTransform().setLocalPosition(new vec3(0, 0, LABEL_Z))
+    so.setParent(root)
+    so.getTransform().setLocalPosition(new vec3(STATUS_PAD, 0, LABEL_Z))
     const t = so.createComponent("Component.Text") as Text
     t.font = THEME_FONT
     t.size = STATUS_SIZE
     t.depthTest = true
     t.textFill.color = COLOR.textMuted
-    t.horizontalAlignment = HorizontalAlignment.Center
+    t.horizontalAlignment = HorizontalAlignment.Left
     t.verticalAlignment = VerticalAlignment.Center
     t.horizontalOverflow = HorizontalOverflow.Overflow
-    t.layoutRect = Rect.create(-PANEL_W / 2, PANEL_W / 2, -1.5, 1.5)
-    return t
+    t.layoutRect = Rect.create(0, STATUS_MAX_W - STATUS_PAD * 2, -STATUS_H / 2, STATUS_H / 2)
+    this.status = t
+  }
+
+  private writeStatus(text: string, color: vec4): void {
+    if (!this.status || !this.statusPlate) return
+    this.status.text = text
+    this.status.textFill.color = color
+    const b = this.statusPlate.begin()
+    if (text.length > 0) {
+      const w = Math.min(STATUS_MAX_W, text.length * STATUS_CHAR_W + STATUS_PAD * 2)
+      const pts = roundedRect(w, STATUS_H, PLATE_RADIUS).map((p) => new vec2(p.x + w / 2, p.y))
+      appendFill(b, pts, 0)
+    }
+    this.statusPlate.commit()
   }
 
   private makeRow(parent: SceneObject, defs: ButtonDef[]): SceneObject {
@@ -251,7 +342,10 @@ export class CanvasDockUI extends BaseScriptComponent {
         BTN_H,
         BUTTON_SIZE,
         () => this.activeActions.has(def.action),
-        () => this._onAction.invoke(def.action),
+        () => {
+          this._onAction.invoke(def.action)
+          if (!KEEP_OPEN.has(def.action.split(":")[0])) this.setOpen(false)
+        },
         def.icon
       )
       this.buttons.set(def.action, btn)
@@ -279,31 +373,30 @@ export class CanvasDockUI extends BaseScriptComponent {
 
   /** El nombre del botón de solo icono al que se apunta; al salir vuelve el mensaje que había. */
   private showHint(label: string | null): void {
-    if (!this.status) return
-    if (label) {
-      this.status.text = label
-      this.status.textFill.color = COLOR.text
-    } else {
-      this.setStatus(this.pendingStatus, this.pendingTone)
-    }
+    if (label) this.writeStatus(label, COLOR.text)
+    else this.setStatus(this.pendingStatus, this.pendingTone)
   }
 
   /** El color refuerza el mensaje, que siempre explica por sí mismo qué ocurre. */
   setStatus(msg: string, tone: StatusTone = "normal"): void {
     this.pendingStatus = msg
     this.pendingTone = tone
-    if (!this.status) return
-    this.status.text = (tone === "warning" ? "Aviso: " : tone === "error" ? "Error: " : "") + msg
-    this.status.textFill.color = tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.textMuted
+    this.writeStatus(
+      (tone === "warning" ? "Aviso: " : tone === "error" ? "Error: " : "") + msg,
+      tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.textMuted
+    )
   }
 
   setPhase(phase: "place" | "work"): void {
     this.pendingPhase = phase
     if (!this.ready) return
     const working = phase === "work"
-    this.setPlateSize(new vec2(PANEL_W + 2, working ? PANEL_H + 1.4 : COMPACT_H))
-    // La columna empieza arriba: en modo compacto se baja para centrar lo visible en la placa.
-    const shift = working ? 0 : (PANEL_H - COMPACT_H) / 2
+    const plateH = working ? PANEL_H + 1.4 : COMPACT_H
+    this.setPlateSize(new vec2(PANEL_W + 2, plateH))
+    this.menu?.getTransform().setLocalPosition(new vec3(0, MENU_TOP - plateH / 2, 0))
+    this.setOpen(false)
+    // La columna empieza arriba: en modo compacto se baja para centrar su única fila en la placa.
+    const shift = working ? 0 : (PANEL_H - ROW_H) / 2
     this.content?.getTransform().setLocalPosition(new vec3(0, -shift, 0.6))
     for (const row of this.workRows) row.enabled = working
     this.panes.forEach((row) => {
@@ -321,18 +414,20 @@ export class CanvasDockUI extends BaseScriptComponent {
     return found
   }
 
-  /** Media altura de la placa visible, en centímetros. */
-  get halfHeight(): number {
-    return (this.pendingPhase === "work" ? PANEL_H + 1.4 : COMPACT_H) / 2
-  }
-
-  getTransform(): Transform {
-    return this.sceneObject.getTransform()
-  }
-
-  setPose(position: vec3, rotation: quat): void {
-    const t = this.sceneObject.getTransform()
-    t.setWorldPosition(position)
-    t.setWorldRotation(rotation)
+  /** Si un rayo pasa por algo visible de esta capa: el botón, el estado o el menú abierto. */
+  hitsRay(origin: vec3, dir: vec3): boolean {
+    const inv = this.sceneObject.getTransform().getInvertedWorldTransform()
+    const o = inv.multiplyPoint(origin)
+    const d = inv.multiplyPoint(origin.add(dir)).sub(o)
+    if (Math.abs(d.z) < 1e-4) return false
+    const k = -o.z / d.z
+    if (k <= 0) return false
+    const x = o.x + d.x * k
+    const y = o.y + d.y * k
+    if (Math.abs(x - TOGGLE_X) < TOGGLE_SIZE / 2 && Math.abs(y - TOGGLE_Y) < TOGGLE_SIZE / 2) return true
+    if (this.pendingStatus && x > STATUS_LEFT && x < STATUS_LEFT + STATUS_MAX_W && Math.abs(y - TOGGLE_Y) < STATUS_H / 2) return true
+    if (!this.opened) return false
+    const h = this.pendingPhase === "work" ? PANEL_H + 1.4 : COMPACT_H
+    return Math.abs(x) < PANEL_W / 2 + 1 && y < MENU_TOP && y > MENU_TOP - h
   }
 }
