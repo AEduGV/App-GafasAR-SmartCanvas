@@ -13,7 +13,7 @@ import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
 import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
-import {makePill, paintPill, setPillIcon} from "./CanvasPill"
+import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
 type Tool = "select" | "connect" | "draw" | "erase" | "underline"
@@ -40,6 +40,9 @@ const SNAP_GAP = 0.4
 const LINK_BUTTON_GAP = 15
 const LINK_BUTTON_SIZE = 4.6
 const LINK_BUTTON_Z = 2
+const UNDO_SIZE = 4.2
+// Pasos de Deshacer que recuerda cada canvas.
+const UNDO_LIMIT = 40
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
 const BORDER_IDLE = withAlpha(COLOR.outline, 0.6)
@@ -271,6 +274,9 @@ export class CanvasApp extends BaseScriptComponent {
 
   private createCanvas(orientation: Orientation): CanvasInstance {
     const canvas = new CanvasInstance(this.sceneObject, "Canvas_" + this.nextCanvasId++, orientation)
+    canvas.doc.subscribe(() => {
+      canvas.undoDirty = true
+    })
     this.canvases.push(canvas)
     return canvas
   }
@@ -509,6 +515,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.renderer.setContentVisible(false)
     this.canvasRoot.enabled = false
     if (this.active.bar) this.active.bar.sceneObject.enabled = false
+    if (this.active.undoButton) this.active.undoButton.enabled = false
     this.press = null
     this.clearSelection()
     this.dock.setPhase("place")
@@ -571,6 +578,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.canvasRoot.enabled = true
       this.renderer.setContentVisible(true)
       if (this.active.bar) this.active.bar.sceneObject.enabled = true
+      if (this.active.undoButton) this.active.undoButton.enabled = true
     }
     this.placing = null
     this.phase = "work"
@@ -772,6 +780,12 @@ export class CanvasApp extends BaseScriptComponent {
     bar.onAction.add((action) => this.onEdgeAction(canvas, action))
     bar.onShape.add((shape) => this.changeShape(canvas, shape))
     canvas.bar = bar
+    const holder = global.scene.createSceneObject("UndoButton")
+    holder.setParent(canvas.root)
+    holder.createComponent("Component.Canvas")
+    const undo = makePill(holder, "Deshacer", UNDO_SIZE, UNDO_SIZE, 56, () => false, () => this.undo(canvas), ICON.undo)
+    addPillEdge(undo)
+    canvas.undoButton = holder
     return bar
   }
 
@@ -849,6 +863,71 @@ export class CanvasApp extends BaseScriptComponent {
       const tilt = (MENU_TILT * Math.PI) / 180
       canvas.bar.setPose(new vec3(hub.x, hub.y, 1 + RING_RADIUS * Math.sin(tilt)), quat.angleAxis(tilt, vec3.right()))
     }
+    const t = canvas.undoButton?.getTransform()
+    if (!t) return
+    const u = canvas.undoPoint
+    if (canvas.orientation === "vertical") {
+      t.setLocalPosition(new vec3(u.x, u.y, 1.4))
+      t.setLocalRotation(quat.quatIdentity())
+    } else {
+      const tilt = (MENU_TILT * Math.PI) / 180
+      t.setLocalPosition(new vec3(u.x, u.y, 1 + (UNDO_SIZE / 2) * Math.sin(tilt)))
+      t.setLocalRotation(quat.angleAxis(tilt, vec3.right()))
+    }
+  }
+
+  // ── Deshacer ─────────────────────────────────────────────────────────────
+
+  private undoSnapshot(c: CanvasInstance): string {
+    return JSON.stringify({shape: c.renderer.shape, bounds: c.renderer.getBounds(), doc: c.doc.serialize()})
+  }
+
+  /**
+   * Cada canvas guarda su estado cuando termina una acción: al soltar, al dejar de escribir o tras un botón.
+   * Si cambió, el anterior pasa al historial. Así un arrastre entero se deshace de una vez.
+   */
+  private commitUndoStates(): void {
+    if (this.press || this.editing || this.phase !== "work") return
+    for (const c of this.canvases) {
+      if (!c.placed) continue
+      const bounds = c.renderer.getBounds()
+      const shape = c.renderer.shape
+      if (c.undoState !== null && !c.undoDirty && bounds === c.undoBounds && shape === c.undoShape) continue
+      const state = this.undoSnapshot(c)
+      if (c.undoState !== null && state !== c.undoState) {
+        c.undoStack.push(c.undoState)
+        if (c.undoStack.length > UNDO_LIMIT) c.undoStack.shift()
+      }
+      c.undoState = state
+      c.undoDirty = false
+      c.undoBounds = bounds
+      c.undoShape = shape
+    }
+  }
+
+  private undo(canvas: CanvasInstance): void {
+    if (this.phase !== "work") return
+    this.closeEdgeMenu()
+    this.dock.closeMenu()
+    if (this.editing) this.finishEditing()
+    this.activate(canvas)
+    this.commitUndoStates()
+    const prev = canvas.undoStack.pop()
+    if (!prev) {
+      this.dock.setStatus("No hay nada que deshacer en este canvas")
+      return
+    }
+    this.clearSelection()
+    const data = JSON.parse(prev) as {shape: CanvasShape; bounds: Bounds; doc: string}
+    canvas.renderer.setShape(data.shape)
+    canvas.renderer.setBounds(data.bounds)
+    canvas.doc.restore(data.doc)
+    canvas.undoState = prev
+    canvas.undoDirty = false
+    canvas.undoBounds = canvas.renderer.getBounds()
+    canvas.undoShape = canvas.renderer.shape
+    this.dock.setStatus(canvas.undoStack.length > 0 ? "Deshecho. Pulsa otra vez para deshacer más" : "Deshecho")
+    this.log("deshacer en " + canvas.id + " (quedan " + canvas.undoStack.length + ")")
   }
 
   private groupMembers(canvas: CanvasInstance): CanvasInstance[] {
@@ -1062,7 +1141,8 @@ export class CanvasApp extends BaseScriptComponent {
       fromRotation: drag.rotation,
       toRotation: quat.lookAt(frame.normal, frame.up),
       fromScale: drag.scale,
-      toScale: this.scaleForDistance(point.distance(this.camera.getWorldPosition())),
+      // Solo estirar los bordes cambia el tamaño: al pegarse a otra superficie conserva su escala.
+      toScale: drag.scale,
       start: getTime(),
     }
     for (const m of drag.members) m.canvas.orientation = frame.orientation
@@ -1332,12 +1412,15 @@ export class CanvasApp extends BaseScriptComponent {
     const basis = this.basisFor(this.orientation)
     this.planeNormal = basis.normal
     this.planeUp = basis.up
-    this.setCanvasScale(1)
+    // A la misma distancia y escala que un canvas creado en el aire.
+    this.setCanvasScale(this.scaleForDistance(FLOATING_DISTANCE))
+    const k = this.canvasScale
     const right = basis.up.cross(basis.normal).normalize()
+    const base = this.orientation === "vertical" ? this.viewPoint(FLOATING_DISTANCE, 0) : this.comfortableCenter("horizontal")
     // Cada canvas colocado así se sitúa junto al anterior, sin taparlo.
-    const center = this.comfortableCenter(this.orientation).add(right.uniformScale(80 * (this.canvases.length - 1)))
-    const a = center.sub(right.uniformScale(36)).sub(basis.up.uniformScale(22))
-    const b = center.add(right.uniformScale(36)).add(basis.up.uniformScale(22))
+    const center = base.add(right.uniformScale(80 * k * (this.canvases.length - 1)))
+    const a = center.sub(right.uniformScale(36 * k)).sub(basis.up.uniformScale(22 * k))
+    const b = center.add(right.uniformScale(36 * k)).add(basis.up.uniformScale(22 * k))
     this.canvasRoot.enabled = true
     this.corner = a
     this.finishPlacement(b)
@@ -1449,12 +1532,8 @@ export class CanvasApp extends BaseScriptComponent {
     }
 
     if (!resolved) {
-      // Pulsar fuera para dejar de escribir solo deselecciona: no empieza otro canvas.
-      if (wasEditing) this.clearSelection()
-      // Un trazo que empieza un poco fuera es un fallo de puntería, no un canvas nuevo.
-      else if (this.tool === "draw") this.dock.setStatus("Dibuja dentro del canvas. Para crear otro, desactiva Dibujar", "warning")
-      else if (this.tool === "erase") this.dock.setStatus("Borra dentro del canvas. Para crear otro, desactiva la goma", "warning")
-      else this.startCanvasOutside(interactor)
+      // Pulsar fuera siempre empieza otro canvas, sea cual sea la herramienta o aunque se estuviera escribiendo.
+      this.startCanvasOutside(interactor)
       return
     }
     if ("link" in resolved) {
@@ -1605,6 +1684,7 @@ export class CanvasApp extends BaseScriptComponent {
   private update(): void {
     flushRetired()
     this.updateLinkButtons()
+    this.commitUndoStates()
     this.updateDeleteState()
     this.updateFlip()
     if (this.phase === "place") {
@@ -1777,7 +1857,7 @@ export class CanvasApp extends BaseScriptComponent {
       case "draw":
         return "Dibuja sobre el canvas: fuera de él no se pinta"
       case "erase":
-        return "Arrastra sobre lo dibujado para borrarlo. No afecta a notas ni figuras"
+        return "Arrastra para borrar: los trazos se borran por partes y lo demás, entero"
       case "underline":
         return "Pellizca un elemento para subrayarlo"
       default:
@@ -1967,7 +2047,37 @@ export class CanvasApp extends BaseScriptComponent {
       const b = this.active.rayPoint(ray.origin, ray.dir, z)
       if (a && b && this.eraseFromStroke(s, a, b)) removed = true
     }
+    // Lo demás se borra entero al tocarlo. Una pantalla, solo por su borde: así se puede borrar lo
+    // dibujado dentro sin perderla.
+    const hits: string[] = []
+    this.doc.elements.forEach((el) => {
+      if (el.kind === "stroke") return
+      const z = elementZ(el)
+      const a = this.active.rayPoint(prev.origin, prev.dir, z)
+      const b = this.active.rayPoint(ray.origin, ray.dir, z)
+      if (a && b && this.eraserTouches(el, a, b)) hits.push(el.id)
+    })
+    if (hits.length > 0) {
+      this.clearSelection()
+      for (const id of hits) this.doc.remove(id)
+      this.log("goma: borrados " + hits.join(", "))
+      return
+    }
     if (removed) this.publishSelection()
+  }
+
+  /** Si la goma, al pasar de a a b, toca el elemento; en una pantalla, solo su borde. */
+  private eraserTouches(el: CanvasElement, a: vec2, b: vec2): boolean {
+    const steps = Math.max(1, Math.ceil(a.distance(b) / ERASE_STEP))
+    for (let i = 0; i <= steps; i++) {
+      const p = vec2.lerp(a, b, i / steps)
+      const dx = Math.abs(p.x - el.x) - el.w / 2
+      const dy = Math.abs(p.y - el.y) - el.h / 2
+      const outside = Math.hypot(Math.max(dx, 0), Math.max(dy, 0))
+      const distance = el.kind === "screen" && dx < 0 && dy < 0 ? -Math.max(dx, dy) : outside
+      if (distance <= ERASER_RADIUS) return true
+    }
+    return false
   }
 
   /** Quita de un trazo lo que queda bajo la goma y lo parte si hace falta. Devuelve si desapareció entero. */

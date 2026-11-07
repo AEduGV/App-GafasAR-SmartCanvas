@@ -23,8 +23,9 @@ import {COLOR, LAYER_GAP, PALETTE, RADIUS, withAlpha} from "./CanvasTheme"
 const BASE_MATERIAL = requireAsset("../Materials/CanvasUnlit.mat") as Material
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
-const BODY_SIZE = 64
-const TITLE_SIZE = 72
+// Algo mayores que al principio, para leerse mejor en AR. Si no caben, el texto se encoge solo.
+const BODY_SIZE = 78
+const TITLE_SIZE = 88
 // Casi transparente: el canvas se lee por sus bordes. El texto suelto pierde contraste sobre fondos claros.
 const SURFACE_ALPHA = 0.25
 // Grosor de la lámina, hacia detrás de la cara: de lado se ve como una hoja, no como un plano que desaparece.
@@ -419,8 +420,15 @@ const BORDER_INNER_RATIO = 0.15
 const BORDER_AXIS_THRESHOLD = 0.45
 const retired: {so: SceneObject; at: number}[] = []
 
+// Donde se aparca lo que se va a destruir: fuera de cualquier rayo.
+const RETIRE_PARKING = new vec3(0, -100000, 0)
+
+/**
+ * Destruye el objeto un poco después, sin desactivarlo. Desactivarlo lo daría de baja en SIK sin sacarlo de la
+ * caché del cursor, que fallaría con "Object is null" al destruirlo. Alejado de la vista, SIK lo descarta solo.
+ */
 export function retire(so: SceneObject): void {
-  so.enabled = false
+  so.getTransform().setWorldPosition(RETIRE_PARKING)
   retired.push({so, at: getTime() + RETIRE_DELAY})
 }
 

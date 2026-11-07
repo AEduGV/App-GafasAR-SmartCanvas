@@ -37,6 +37,8 @@ export type DocEvent =
 
 export const LAYER_COUNT = 4
 
+type StoredElement = Omit<CanvasElement, "points"> & {points: number[][]}
+
 export class CanvasDocument {
   readonly elements = new Map<string, CanvasElement>()
   readonly connections = new Map<string, CanvasConnection>()
@@ -180,6 +182,30 @@ export class CanvasDocument {
       if (o.groupId === gid) ids.push(o.id)
     })
     for (const m of ids) this.update(m, {groupId: null})
+  }
+
+  /** Todo el contenido como texto, para poder volver a él con Deshacer. */
+  serialize(): string {
+    const els: StoredElement[] = Array.from(this.elements.values()).map((e) => ({...e, points: e.points.map((p) => [p.x, p.y])}))
+    return JSON.stringify({els, conns: Array.from(this.connections.values())})
+  }
+
+  /** Sustituye todo el contenido por uno guardado con `serialize`, conservando sus identificadores. */
+  restore(data: string): void {
+    this.clear()
+    const parsed = JSON.parse(data) as {els: StoredElement[]; conns: CanvasConnection[]}
+    const els: CanvasElement[] = parsed.els.map((e) => ({...e, points: e.points.map((p) => new vec2(p[0], p[1]))}))
+    // Primero lo que no depende de otro: una pantalla antes que lo que contiene, un texto antes que su subrayado.
+    els.sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+    for (const el of els) {
+      this.elements.set(el.id, el)
+      this.emit({type: "added", id: el.id})
+    }
+    for (const c of parsed.conns) {
+      const copy = {...c}
+      this.connections.set(copy.id, copy)
+      this.emit({type: "connAdded", id: copy.id})
+    }
   }
 
   clear(): void {

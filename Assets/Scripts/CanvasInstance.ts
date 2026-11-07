@@ -24,6 +24,13 @@ export class CanvasInstance {
   barBounds: Bounds | null = null
   barOrientation: Orientation | null = null
   barShape: string | null = null
+  // Deshacer: estados anteriores (contenido, tamaño y forma) y el último confirmado.
+  undoStack: string[] = []
+  undoState: string | null = null
+  undoDirty = false
+  undoBounds: Bounds | null = null
+  undoShape: string | null = null
+  undoButton: SceneObject | null = null
 
   constructor(parent: SceneObject, readonly id: string, orientation: Orientation) {
     this.orientation = orientation
@@ -71,6 +78,16 @@ export class CanvasInstance {
     const edge = outlineIntersection(this.renderer.outlinePoints(), new vec2(w, h))
     const inset = HUB_INSET * Math.SQRT1_2
     return new vec2((b.minX + b.maxX) / 2 + edge.x - inset, (b.minY + b.maxY) / 2 + edge.y - inset)
+  }
+
+  /** Dónde va el botón Deshacer: en la esquina superior izquierda, simétrico al botón +. */
+  get undoPoint(): vec2 {
+    const b = this.renderer.getBounds()
+    const w = b.maxX - b.minX
+    const h = b.maxY - b.minY
+    const edge = outlineIntersection(this.renderer.outlinePoints(), new vec2(-w, h))
+    const inset = HUB_INSET * Math.SQRT1_2
+    return new vec2((b.minX + b.maxX) / 2 + edge.x + inset, (b.minY + b.maxY) / 2 + edge.y - inset)
   }
 
   /** La zona del botón + o, abierto, de su anillo, incluidos los huecos entre botones. */
