@@ -204,6 +204,23 @@ export function appendFill(b: MeshBuilder, pts: vec2[], z: number): void {
   b.appendIndices(idx)
 }
 
+/** Pared alrededor de un contorno cerrado, de z0 a z1: el canto de una lámina. */
+export function appendWall(b: MeshBuilder, pts: vec2[], z0: number, z1: number): void {
+  const n = pts.length
+  if (n < 2) return
+  const base = b.getVerticesCount()
+  const verts: number[] = []
+  for (const p of pts) verts.push(p.x, p.y, z0, 0, 0, 1, 0.5, 0.5, p.x, p.y, z1, 0, 0, 1, 0.5, 0.5)
+  b.appendVerticesInterleaved(verts)
+  const idx: number[] = []
+  for (let i = 0; i < n; i++) {
+    const a = base + i * 2
+    const c = base + ((i + 1) % n) * 2
+    idx.push(a, c, a + 1, a + 1, c, c + 1)
+  }
+  b.appendIndices(idx)
+}
+
 /** Cinta plana de grosor constante sobre el plano z. */
 /** Los tramos seguidos de un contorno cerrado y centrado cuya normal exterior mira hacia esa dirección. */
 export function outlineFacing(pts: vec2[], dir: vec2, minDot: number): vec2[][] {

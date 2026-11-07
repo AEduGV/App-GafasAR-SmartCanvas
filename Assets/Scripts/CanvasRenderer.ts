@@ -6,6 +6,7 @@ import {
   appendFill,
   appendStroke,
   appendTube,
+  appendWall,
   canvasOutline,
   CanvasShape,
   clearBuilder,
@@ -26,6 +27,9 @@ const BODY_SIZE = 64
 const TITLE_SIZE = 72
 // Con este alfa, el texto sobre el canvas llega a 4,5:1 aunque detrás haya blanco.
 const SURFACE_ALPHA = 0.75
+// Grosor de la lámina, hacia detrás de la cara: de lado se ve como una hoja, no como un plano que desaparece.
+const SHEET_DEPTH = 0.8
+const SHEET_FRONT = -0.05
 const SCREEN_ALPHA = 0.9
 
 // Orden dentro de una capa: pantalla debajo, trazos encima.
@@ -430,6 +434,8 @@ export class CanvasRenderer {
   private content: SceneObject
   private surface: MeshSlot
   private surfaceBorder: MeshSlot
+  private sheetEdge: MeshSlot
+  private sheetBack: MeshSlot
   private borderHighlight: MeshSlot
   private highlightGrab: BorderGrab | null = null
   private surfaceHit: {interactable: Interactable; shape: BoxShape; collider: ColliderComponent}
@@ -450,6 +456,8 @@ export class CanvasRenderer {
     this.root = root
     this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.surface, SURFACE_ALPHA), false)
     this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", COLOR.outline, false)
+    this.sheetEdge = new MeshSlot(root, "SheetEdge", withAlpha(COLOR.outline, 0.28), false)
+    this.sheetBack = new MeshSlot(root, "SheetBack", withAlpha(COLOR.outline, 0.45), false)
     this.borderHighlight = new MeshSlot(root, "BorderHighlight", COLOR.primary, false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
@@ -595,8 +603,14 @@ export class CanvasRenderer {
     // El colisionador se centra en su objeto, así que la superficie se mueve con el centro.
     const pts = canvasOutline(this.currentShape, w, h, RADIUS.card)
     this.outline = pts
-    appendFill(this.surface.begin(), pts, -0.05)
+    appendFill(this.surface.begin(), pts, SHEET_FRONT)
     this.surface.commit()
+    appendWall(this.sheetEdge.begin(), pts, SHEET_FRONT, SHEET_FRONT - SHEET_DEPTH)
+    this.sheetEdge.commit()
+    appendStroke(this.sheetBack.begin(), pts, true, 0.08, SHEET_FRONT - SHEET_DEPTH)
+    this.sheetBack.commit()
+    this.sheetEdge.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
+    this.sheetBack.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
     appendStroke(this.surfaceBorder.begin(), pts, true, 0.12, -0.03)
     this.surfaceBorder.commit()
     this.surfaceHit.shape.size = new vec3(w, h, 0.2)
