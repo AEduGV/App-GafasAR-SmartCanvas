@@ -65,14 +65,13 @@ const CANDIDATE_DOT = 0.9
 const HORIZONTAL_MIN_Y = 0.8
 const VERTICAL_MAX_Y = 0.4
 const MAX_DRAG_DISTANCE = 600
-// Mantener pulsado el interior sin mover la mano recoge el canvas en una bola que se lleva en los dedos.
+// Mantener pulsado el interior sin mover la mano encoge el canvas a una miniatura que se lleva en los dedos.
 const HOLD_TIME = 0.5
 const HOLD_STILL_DOT = 0.9999 // unos 0,8 grados: por debajo, es un toque y el canvas no se mueve
-const BALL_RADIUS = 3
+// Agarrado, el canvas se encoge a una miniatura de sí mismo de este tamaño (cm, su lado mayor).
+const MINI_SIZE = 7
 const BALL_TIME = 0.18
 const BALL_SURFACE_GAP = 2
-// No se llega a 0: una escala nula rompería la matriz de los objetos que siguen dentro del canvas.
-const COLLAPSED_SCALE = 0.005
 const DELETE_CONFIRM_TIME = 3
 const MAX_TEXT = 80
 const NOTICE_TIME = 2.5
@@ -146,7 +145,7 @@ interface CanvasDrag {
   startDir: vec3
   /** Ya se movió: mantener pulsado dejó de ser un agarre. */
   moved: boolean
-  ball: {start: number; fullScale: number; from: vec3; distance: number; origin: vec3; dir: vec3; travelled: boolean} | null
+  ball: {start: number; fullScale: number; miniScale: number; from: vec3; fromRotation: quat; distance: number; origin: vec3; dir: vec3; travelled: boolean} | null
   surface: SurfaceHit | null
 }
 
@@ -188,7 +187,6 @@ export class CanvasApp extends BaseScriptComponent {
   private nextGroupId = 1
   private linkButtons = new Map<string, LinkButton>()
   private cursor: MeshSlot
-  private ball: SceneObject
   private cornerA: MeshSlot
   private eraserRing: MeshSlot
   private camera: Transform
@@ -385,7 +383,6 @@ export class CanvasApp extends BaseScriptComponent {
     this.eraserRing.commit()
     this.eraserRing.setVisible(false)
 
-    this.ball = this.makeBall(markers)
     this.initSurfaceDetection()
     this.dock.onAction.add((a) => this.onAction(a))
     this.dock.setActive("width:" + this.widthIndex, true)
@@ -399,34 +396,6 @@ export class CanvasApp extends BaseScriptComponent {
       it.onTriggerCanceled.add(() => this.onTriggerEnd(it))
     }
     this.enterPlacement()
-  }
-
-  /** Un disco de frente con brillo y sombra, que se lee como una esfera sin depender de la luz. */
-  private makeBall(parent: SceneObject): SceneObject {
-    const root = global.scene.createSceneObject("Ball")
-    root.setParent(parent)
-    const circle = (r: number, cx: number, cy: number): vec2[] => {
-      const pts: vec2[] = []
-      for (let i = 0; i < 40; i++) {
-        const a = (i / 40) * Math.PI * 2
-        pts.push(new vec2(cx + Math.cos(a) * r, cy + Math.sin(a) * r))
-      }
-      return pts
-    }
-    const fill = new MeshSlot(root, "BallFill", COLOR.surface, false)
-    appendFill(fill.begin(), circle(BALL_RADIUS, 0, 0), 0)
-    fill.commit()
-    const shade = new MeshSlot(root, "BallShade", withAlpha(COLOR.primary, 0.3), false)
-    appendFill(shade.begin(), circle(BALL_RADIUS * 0.68, -BALL_RADIUS * 0.16, BALL_RADIUS * 0.18), 0.1)
-    shade.commit()
-    const glint = new MeshSlot(root, "BallGlint", withAlpha(COLOR.text, 0.7), false)
-    appendFill(glint.begin(), circle(BALL_RADIUS * 0.17, -BALL_RADIUS * 0.34, BALL_RADIUS * 0.4), 0.2)
-    glint.commit()
-    const rim = new MeshSlot(root, "BallRim", COLOR.primary, false)
-    appendStroke(rim.begin(), circle(BALL_RADIUS, 0, 0), true, 0.22, 0.3)
-    rim.commit()
-    root.enabled = false
-    return root
   }
 
   private makeDot(parent: SceneObject, name: string, r: number, color: vec4): MeshSlot {
@@ -1020,7 +989,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.applyDragPose(drag)
   }
 
-  /** A partir de aquí el canvas se sujeta por su centro, que es donde quedará al soltarlo. */
+  /** A partir de aquí el canvas se sujeta por su centro, que es donde quedará al soltarlo, y se encoge. */
   private gatherIntoBall(drag: CanvasDrag): void {
     const anchor = drag.members[0].canvas
     const b = anchor.renderer.getBounds()
@@ -1031,10 +1000,13 @@ export class CanvasApp extends BaseScriptComponent {
     drag.candidate = null
     const from = anchor.toWorld(center)
     const eye = this.camera.getWorldPosition()
-    drag.ball = {start: getTime(), fullScale, from, distance: from.distance(eye), origin: eye, dir: this.camera.back, travelled: false}
-    this.ball.enabled = true
+    const miniScale = MINI_SIZE / Math.max(b.maxX - b.minX, b.maxY - b.minY)
+    drag.ball = {
+      start: getTime(), fullScale, miniScale, from, fromRotation: drag.rotation,
+      distance: from.distance(eye), origin: eye, dir: this.camera.back, travelled: false,
+    }
     this.closeEdgeMenu()
-    this.dock.setStatus("Lleva la bola adonde quieras y suelta para colocar el canvas")
+    this.dock.setStatus("Lleva el canvas adonde quieras y suelta para colocarlo")
     this.log("canvas " + anchor.id + " agarrado")
   }
 
@@ -1053,29 +1025,27 @@ export class CanvasApp extends BaseScriptComponent {
     const point = origin.add(dir.uniformScale(distance))
     const k = Math.min(1, (getTime() - ball.start) / BALL_TIME)
     const e = k * k * (3 - 2 * k)
-    // Mientras lleva la bola, el canvas sigue ahí recogido: así sus flechas la siguen.
-    drag.scale = ball.fullScale + (COLLAPSED_SCALE - ball.fullScale) * e
+    // Se encoge a una miniatura de sí mismo, con su contenido, que mira hacia el usuario mientras la lleva.
+    const facing = quat.lookAt(this.camera.getWorldPosition().sub(point).normalize(), this.camera.up)
+    drag.scale = ball.fullScale + (ball.miniScale - ball.fullScale) * e
+    drag.rotation = quat.slerp(ball.fromRotation, facing, e)
     drag.target = vec3.lerp(ball.from, point, e)
     this.applyDragPose(drag)
-    const t = this.ball.getTransform()
-    t.setWorldPosition(point)
-    t.setWorldRotation(quat.lookAt(this.camera.getWorldPosition().sub(point).normalize(), this.camera.up))
-    t.setWorldScale(vec3.one().uniformScale(Math.max(0.01, e)))
   }
 
   /**
-   * Reaparece con su tamaño, en la dirección de la bola: en la superficie cercana a la que se apunta o, si no hay,
-   * flotando de frente a la distancia que tenía. Traerlo hasta la bola lo haría enorme.
+   * Reaparece con su tamaño, en la dirección de la miniatura: en la superficie cercana a la que se apunta o, si no hay,
+   * flotando de frente a la distancia que tenía. Traerlo hasta la miniatura lo haría enorme.
    * Devuelve si cambió de sitio.
    */
   private dropBall(drag: CanvasDrag): boolean {
     const ball = drag.ball
     if (!ball) return false
-    this.ball.enabled = false
     drag.ball = null
     drag.scale = ball.fullScale
     // Si no se ha llevado a ningún sitio, vuelve exactamente a donde estaba.
     if (!ball.travelled) {
+      drag.rotation = ball.fromRotation
       drag.target = ball.from
       this.applyDragPose(drag)
       return false
