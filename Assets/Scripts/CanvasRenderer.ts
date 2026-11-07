@@ -45,7 +45,11 @@ export interface Bounds {
 /** Qué lados mueve agarrar el borde en un punto: -1 mínimo, 1 máximo, 0 ninguno. */
 // El tramo resaltado es el que mira hacia el lado agarrado, hasta unos 60 grados de esa dirección.
 const BORDER_HIGHLIGHT_DOT = 0.5
-const BORDER_HIGHLIGHT_WIDTH = 0.3
+// El canvas seleccionado brilla entero; el lado que se agarraría, más grueso y casi blanco.
+const BORDER_WIDTH = 0.12
+const BORDER_SELECTED_WIDTH = 0.3
+const BORDER_HIGHLIGHT_WIDTH = 0.5
+const BORDER_HIGHLIGHT_COLOR = new vec4(0.78, 0.95, 1, 1)
 
 export interface BorderGrab {
   x: number
@@ -438,6 +442,7 @@ export class CanvasRenderer {
   private sheetBack: MeshSlot
   private borderHighlight: MeshSlot
   private highlightGrab: BorderGrab | null = null
+  private borderWidth = BORDER_WIDTH
   private surfaceHit: {interactable: Interactable; shape: BoxShape; collider: ColliderComponent}
   private layerPlanes: MeshSlot[] = []
   private layerLabels: Text[] = []
@@ -458,7 +463,7 @@ export class CanvasRenderer {
     this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", COLOR.outline, false)
     this.sheetEdge = new MeshSlot(root, "SheetEdge", COLOR.outline, false)
     this.sheetBack = new MeshSlot(root, "SheetBack", COLOR.outline, false)
-    this.borderHighlight = new MeshSlot(root, "BorderHighlight", COLOR.primary, false)
+    this.borderHighlight = new MeshSlot(root, "BorderHighlight", BORDER_HIGHLIGHT_COLOR, false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
     for (let i = 1; i < LAYER_COUNT; i++) {
@@ -611,8 +616,7 @@ export class CanvasRenderer {
     this.sheetBack.commit()
     this.sheetEdge.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
     this.sheetBack.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
-    appendStroke(this.surfaceBorder.begin(), pts, true, 0.12, -0.03)
-    this.surfaceBorder.commit()
+    this.drawBorder()
     this.surfaceHit.shape.size = new vec3(w, h, 0.2)
     this.surfaceHit.collider.shape = this.surfaceHit.shape
     this.surface.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
@@ -824,6 +828,19 @@ export class CanvasRenderer {
     this.surfaceBorder.setColor(c)
     this.sheetEdge.setColor(c)
     this.sheetBack.setColor(c)
+  }
+
+  private drawBorder(): void {
+    appendStroke(this.surfaceBorder.begin(), this.outline, true, this.borderWidth, -0.03)
+    this.surfaceBorder.commit()
+  }
+
+  /** El canvas seleccionado lleva el borde más grueso; el color lo pone `setBorderColor`. */
+  setSelected(selected: boolean): void {
+    const width = selected ? BORDER_SELECTED_WIDTH : BORDER_WIDTH
+    if (width === this.borderWidth) return
+    this.borderWidth = width
+    this.drawBorder()
   }
 
   /** Resalta solo el lado que se agarraría; en una esquina, sus dos lados. */

@@ -42,7 +42,6 @@ const LINK_BUTTON_SIZE = 4.6
 const LINK_BUTTON_Z = 2
 const SAME_PLANE_LIMIT = 25
 const SAME_PLANE_DOT = 0.9
-const BORDER_ACTIVE = COLOR.outline
 const BORDER_IDLE = withAlpha(COLOR.outline, 0.6)
 // Tiempo máximo de espera de la detección de superficie antes de usar el plano virtual.
 const CORNER_QUERY_TIMEOUT = 0.5
@@ -285,9 +284,12 @@ export class CanvasApp extends BaseScriptComponent {
     this.refreshBorders()
   }
 
+  /** El canvas seleccionado (el activo) brilla entero en cian; los demás quedan en gris tenue. */
   private refreshBorders(candidate: CanvasInstance | null = null): void {
     for (const c of this.canvases) {
-      c.renderer.setBorderColor(c === candidate ? COLOR.primary : c === this.active ? BORDER_ACTIVE : BORDER_IDLE)
+      const selected = c === this.active && c.placed
+      c.renderer.setBorderColor(c === candidate || selected ? COLOR.primary : BORDER_IDLE)
+      c.renderer.setSelected(selected)
     }
   }
 

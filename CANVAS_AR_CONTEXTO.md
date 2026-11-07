@@ -25,7 +25,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 **Decisiones del usuario (2026-11-05), que mandan sobre las guías:**
 - Versiones (P-04 a P-06) y almacenamiento local quedan fuera por ahora; quizá se añadan más adelante. Reiniciar la Lens borra el contenido.
 - Superficie: mesa y pared.
-- Colores: aplicado el `design.md` revisado, en `CanvasTheme.ts`. Botones con fondo `#182230`, etiqueta `#F4F7FA` y el estado en el borde: `#C8D2DE` en reposo, `#73D8FF` y más grueso si está activo, `#FFD27A` en una confirmación, y al pulsar `#B3BFCD` o `#59BFE8` y aún más grueso. Canvas con `#182230` al 25 % y borde `#A0B1C5`. Avisos y errores llevan los prefijos «Aviso:» y «Error:».
+- Colores: aplicado el `design.md` revisado, en `CanvasTheme.ts`. Botones con fondo `#182230`, etiqueta `#F4F7FA` y el estado en el borde: `#C8D2DE` en reposo, `#73D8FF` y más grueso si está activo, `#FFD27A` en una confirmación, y al pulsar `#B3BFCD` o `#59BFE8` y aún más grueso. Canvas con `#182230` al 25 % y borde `#A0B1C5` al 60 %; el seleccionado, con el borde entero en `#73D8FF` y más grueso. Avisos y errores llevan los prefijos «Aviso:» y «Error:».
 - Fuera de `design.md`: el amarillo de notas pasa a `#806a00` para llegar a 4,5:1, el ámbar pulsado es `#E0B662`, y avisos y errores llevan texto pero no icono. Sin uso porque sus funciones están fuera: `#8FE3B0` (guardado) y los colores de categoría.
 - (2026-11-07) Los botones del panel y del menú radial llevan iconos de Material Symbols sacados de `google/material-design-icons` (ver `THIRD_PARTY_NOTICES.md`), y su nombre aparece en la línea de estado al apuntarlos. Siguen en texto las puertas lógicas y los colores, que no tienen un icono que los distinga.
 - (2026-11-07) `README.md` y `EyeCanvas-AppIcon.png`, en la raíz, son de Alba Anton: no tocarlos ni tomarlos como referencia. Su nombre (EyeCanvas), su demo con versiones y sus enlaces no describen este proyecto ni mandan sobre el alcance.
@@ -155,6 +155,10 @@ Di siempre qué se probó con clics simulados y qué no: el usuario prueba con s
 `https://github.com/AEduGV/App-GafasAR-SmartCanvas.git`, rama `main`. El usuario pidió ir subiendo los cambios: al terminar y probar un cambio, haz commit y `git push`.
 Nunca subir claves ni credenciales (`*.pem`, `.mcp.json`, `mcp.json`, `.codex/`, `.claude/`). Antes de añadir un tipo de archivo nuevo, comprueba `.gitignore`.
 Alba Anton también sube a `main` desde la web de GitHub: haz `git fetch` antes de subir o de apoyarte en una guía, integra con rebase y nunca fuerces. Verifica el commit antes de hacer push, en un paso separado.
+
+## Ideas para más adelante (no hacer sin que lo pida)
+
+- **Guardar (2026-11-07):** el usuario pidió solo información y que se tenga en cuenta. Propuesta: guardado automático en `global.persistentStorageSystem.store` (`GeneralDataStore`, con tope de tamaño consultable; los trazos son lo que más ocupa) y una biblioteca de hojas para reabrir cada canvas delante del usuario. La posición en la habitación no se conserva sola, porque el origen cambia en cada sesión: o disposición relativa (colocar uno y el resto alrededor), o anclas espaciales solo en gafas (paquete aparte, sin comprobar) o ubicaciones personalizadas (`LocatedAtComponent`; `MappingSession` está obsoleta). Exportar o compartir necesitaría red (Snap Cloud), fuera del alcance.
 
 ## Preguntas abiertas para el usuario
 
