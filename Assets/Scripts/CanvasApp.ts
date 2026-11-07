@@ -4,16 +4,16 @@ import {Interactor, InteractorInputType} from "SpectaclesInteractionKit.lspkg/Co
 import WorldCameraFinderProvider from "SpectaclesInteractionKit.lspkg/Providers/CameraProvider/WorldCameraFinderProvider"
 import SIK from "SpectaclesInteractionKit.lspkg/SIK"
 import {CanvasDockUI} from "./CanvasDockUI"
-import {CanvasEdgeBarUI, EdgeAction} from "./CanvasEdgeBarUI"
+import {CanvasEdgeBarUI, EdgeAction, EdgeTool} from "./CanvasEdgeBarUI"
 import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from "./CanvasDocument"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
-import {appendFill, CanvasShape} from "./CanvasGeometry"
+import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
 import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
-type Tool = "select" | "connect" | "draw" | "underline" | "moveCanvas"
+type Tool = "select" | "connect" | "draw" | "erase" | "underline" | "moveCanvas"
 
 const MIN_W = 12
 const MIN_H = 8
@@ -23,6 +23,8 @@ const BORDER_GRAB = 2
 const TAP_SLOP = 1.0
 const DOUBLE_TAP = 0.45
 const STROKE_STEP = 0.5
+const ERASER_RADIUS = 1.5
+const ERASE_STEP = 0.4
 const FLIP_TIME = 0.4
 const SURFACE_OFFSET = 0.4
 const MIN_CORNER_DISTANCE = 5
@@ -94,7 +96,7 @@ const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
 
 interface Press {
   interactor: Interactor
-  mode: "move" | "surface" | "connect" | "draw" | "connection" | "placeDrag" | "moveCanvas" | "resizeCanvas"
+  mode: "move" | "surface" | "connect" | "draw" | "erase" | "connection" | "placeDrag" | "moveCanvas" | "resizeCanvas"
   id: string | null
   planeZ: number
   start: vec2
@@ -102,6 +104,7 @@ interface Press {
   dragged: boolean
   drag?: CanvasDrag
   resize?: {grab: BorderGrab; from: Bounds}
+  eraseRay?: {origin: vec3; dir: vec3}
 }
 
 interface SurfaceFrame {
@@ -152,6 +155,7 @@ export class CanvasApp extends BaseScriptComponent {
   private nextGroupId = 1
   private cursor: MeshSlot
   private cornerA: MeshSlot
+  private eraserRing: MeshSlot
   private camera: Transform
 
   private phase: "place" | "work" = "place"
@@ -329,6 +333,15 @@ export class CanvasApp extends BaseScriptComponent {
     this.cursor = this.makeDot(markers, "Cursor", 0.9, COLOR.primary)
     this.cornerA = this.makeDot(markers, "CornerA", 1.1, COLOR.text)
     this.cornerA.setVisible(false)
+    this.eraserRing = new MeshSlot(markers, "EraserRing", COLOR.text, false)
+    const ring: vec2[] = []
+    for (let i = 0; i < 32; i++) {
+      const a = (i / 32) * Math.PI * 2
+      ring.push(new vec2(Math.cos(a) * ERASER_RADIUS, Math.sin(a) * ERASER_RADIUS))
+    }
+    appendStroke(this.eraserRing.begin(), ring, true, 0.12, 0)
+    this.eraserRing.commit()
+    this.eraserRing.setVisible(false)
 
     this.initSurfaceDetection()
     this.dock.onAction.add((a) => this.onAction(a))
@@ -426,6 +439,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.cornerQuery = null
     this.surfaceHit = null
     this.cornerA.setVisible(false)
+    this.eraserRing.setVisible(false)
     this.cursor.setVisible(true)
     this.renderer.setContentVisible(false)
     this.canvasRoot.enabled = false
@@ -725,7 +739,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.requestDelete(canvas)
       return
     }
-    const tool: Tool = action === "move" ? "moveCanvas" : action === "draw" ? "draw" : "connect"
+    const tool: Tool = action === "move" ? "moveCanvas" : action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
     this.setTool(this.tool === tool ? "select" : tool)
   }
 
@@ -1260,6 +1274,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (wasEditing) this.clearSelection()
       // Un trazo que empieza un poco fuera es un fallo de puntería, no un canvas nuevo.
       else if (this.tool === "draw") this.dock.setStatus("Dibuja dentro del canvas. Para crear otro, desactiva Dibujar", "warning")
+      else if (this.tool === "erase") this.dock.setStatus("Borra dentro del canvas. Para crear otro, desactiva la goma", "warning")
       else this.startCanvasOutside(interactor)
       return
     }
@@ -1279,6 +1294,14 @@ export class CanvasApp extends BaseScriptComponent {
     }
     if (this.tool === "draw") {
       this.beginStroke(interactor)
+      return
+    }
+    if (this.tool === "erase") {
+      this.press = {
+        interactor, mode: "erase", id: null, planeZ: 0,
+        start: new vec2(0, 0), last: new vec2(0, 0), dragged: true,
+      }
+      this.eraseStep(this.press)
       return
     }
     if (this.tool === "underline") {
@@ -1400,6 +1423,9 @@ export class CanvasApp extends BaseScriptComponent {
       case "draw":
         this.endStroke()
         break
+      case "erase":
+        this.log("goma: quedan " + this.countStrokes() + " trazos")
+        break
       case "moveCanvas":
         this.endMoveCanvas(press)
         break
@@ -1425,6 +1451,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.updateEdgeBarPose(c)
     }
     this.links.update()
+    this.updateEraserRing()
 
     const press = this.press
     if (!press) {
@@ -1433,6 +1460,10 @@ export class CanvasApp extends BaseScriptComponent {
     }
     if (press.mode === "moveCanvas") {
       this.updateMoveCanvas(press)
+      return
+    }
+    if (press.mode === "erase") {
+      this.eraseStep(press)
       return
     }
     const p = this.canvasPoint(press.interactor, press.planeZ)
@@ -1479,7 +1510,7 @@ export class CanvasApp extends BaseScriptComponent {
     let hoverCanvas: CanvasInstance | null = null
     let hoverId: string | null = null
     let border: CanvasInstance | null = null
-    if (this.tool !== "moveCanvas" && this.tool !== "draw") {
+    if (this.tool !== "moveCanvas" && this.tool !== "draw" && this.tool !== "erase") {
       const it = SIK.InteractionManager.getTargetingInteractors()[0]
       const current = it ? it.currentInteractable : null
       const resolved = this.resolveTarget(current)
@@ -1578,6 +1609,8 @@ export class CanvasApp extends BaseScriptComponent {
         return "Arrastra de un bloque a otro, o de este canvas a otro canvas"
       case "draw":
         return "Dibuja sobre el canvas: fuera de él no se pinta"
+      case "erase":
+        return "Arrastra sobre lo dibujado para borrarlo. No afecta a notas ni figuras"
       case "underline":
         return "Pellizca un elemento para subrayarlo"
       case "moveCanvas":
@@ -1716,12 +1749,17 @@ export class CanvasApp extends BaseScriptComponent {
       this.doc.remove(s.id)
       return
     }
-    // Reexpresa el trazo respecto a su centro para que su caja de selección sea correcta.
+    this.doc.update(s.id, this.strokeFrame(s.points))
+    this.log("trazo con " + s.points.length + " puntos")
+  }
+
+  /** Expresa un trazo respecto a su centro para que su caja de selección sea correcta. */
+  private strokeFrame(points: vec2[]): Partial<CanvasElement> {
     let minX = Infinity
     let maxX = -Infinity
     let minY = Infinity
     let maxY = -Infinity
-    for (const p of s.points) {
+    for (const p of points) {
       minX = Math.min(minX, p.x)
       maxX = Math.max(maxX, p.x)
       minY = Math.min(minY, p.y)
@@ -1729,14 +1767,106 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2
-    this.doc.update(s.id, {
+    return {
       x: cx,
       y: cy,
       w: Math.max(maxX - minX, 2),
       h: Math.max(maxY - minY, 2),
-      points: s.points.map((p) => new vec2(p.x - cx, p.y - cy)),
+      points: points.map((p) => new vec2(p.x - cx, p.y - cy)),
+    }
+  }
+
+  private countStrokes(): number {
+    let n = 0
+    this.doc.elements.forEach((el) => {
+      if (el.kind === "stroke") n++
     })
-    this.log("trazo con " + s.points.length + " puntos")
+    return n
+  }
+
+  /** Borra lo que toca desde la última posición: así un gesto rápido no deja huecos sin borrar. */
+  private eraseStep(press: Press): void {
+    const ray = this.activeRay(press.interactor)
+    if (!ray) return
+    const prev = press.eraseRay ?? ray
+    press.eraseRay = {origin: ray.origin, dir: ray.dir}
+    const strokes: CanvasElement[] = []
+    this.doc.elements.forEach((el) => {
+      if (el.kind === "stroke") strokes.push(el)
+    })
+    let removed = false
+    for (const s of strokes) {
+      // Cada capa está a otra profundidad: la goma se mide en el plano de cada trazo.
+      const z = elementZ(s)
+      const a = this.active.rayPoint(prev.origin, prev.dir, z)
+      const b = this.active.rayPoint(ray.origin, ray.dir, z)
+      if (a && b && this.eraseFromStroke(s, a, b)) removed = true
+    }
+    if (removed) this.publishSelection()
+  }
+
+  /** Quita de un trazo lo que queda bajo la goma y lo parte si hace falta. Devuelve si desapareció entero. */
+  private eraseFromStroke(s: CanvasElement, a: vec2, b: vec2): boolean {
+    const reach = ERASER_RADIUS + s.strokeWidth / 2
+    if (
+      Math.max(a.x, b.x) < s.x - s.w / 2 - reach ||
+      Math.min(a.x, b.x) > s.x + s.w / 2 + reach ||
+      Math.max(a.y, b.y) < s.y - s.h / 2 - reach ||
+      Math.min(a.y, b.y) > s.y + s.h / 2 + reach
+    ) {
+      return false
+    }
+    const points = resamplePolyline(
+      s.points.map((p) => new vec2(s.x + p.x, s.y + p.y)),
+      ERASE_STEP
+    )
+    const runs: vec2[][] = []
+    let current: vec2[] = []
+    let erased = false
+    for (const p of points) {
+      if (segmentDistance(p, a, b) <= reach) {
+        erased = true
+        if (current.length > 1) runs.push(current)
+        current = []
+      } else {
+        current.push(p)
+      }
+    }
+    if (current.length > 1) runs.push(current)
+    if (!erased) return false
+    if (runs.length === 0) {
+      this.selection.delete(s.id)
+      this.doc.remove(s.id)
+      return true
+    }
+    this.doc.update(s.id, this.strokeFrame(runs[0]))
+    for (let i = 1; i < runs.length; i++) {
+      this.doc.add({
+        kind: "stroke",
+        layer: s.layer,
+        color: s.color,
+        strokeWidth: s.strokeWidth,
+        parentId: s.parentId,
+        groupId: s.groupId,
+        ...this.strokeFrame(runs[i]),
+      })
+    }
+    return false
+  }
+
+  /** Muestra lo que abarca la goma sobre el canvas al que se apunta. */
+  private updateEraserRing(): void {
+    const pressing = this.press?.mode === "erase"
+    const ray = this.tool === "erase" ? this.activeRay(pressing ? this.press?.interactor : undefined) : null
+    const canvas = !ray ? null : pressing ? this.active : this.canvasUnderRay(ray.origin, ray.dir, null)
+    const z = canvas ? layerZ(canvas.activeLayer) + 1 : 0
+    const p = canvas && ray ? canvas.rayPoint(ray.origin, ray.dir, z) : null
+    this.eraserRing.setVisible(!!p)
+    if (!canvas || !p) return
+    const t = this.eraserRing.sceneObject.getTransform()
+    t.setWorldPosition(canvas.toWorld(new vec3(p.x, p.y, z)))
+    t.setWorldRotation(canvas.transform.getWorldRotation())
+    t.setWorldScale(new vec3(canvas.scale, canvas.scale, canvas.scale))
   }
 
   private underline(id: string): void {
@@ -1888,8 +2018,11 @@ export class CanvasApp extends BaseScriptComponent {
 
   private refreshEdgeTool(): void {
     const tool = this.tool
-    const edge = tool === "moveCanvas" ? "move" : tool === "draw" ? "draw" : tool === "connect" ? "arrow" : null
-    for (const c of this.canvases) c.bar?.setActive(edge)
+    for (const c of this.canvases) c.bar?.setActive(this.edgeToolFor(tool))
+  }
+
+  private edgeToolFor(tool: Tool): EdgeTool | null {
+    return tool === "moveCanvas" ? "move" : tool === "draw" ? "draw" : tool === "erase" ? "erase" : tool === "connect" ? "arrow" : null
   }
 
   private onKey(e: KeyPressEvent): void {
@@ -1920,9 +2053,9 @@ export class CanvasApp extends BaseScriptComponent {
     this.dock.setActive("tool:select", tool === "select")
     this.dock.setActive("tool:connect", tool === "connect")
     this.dock.setActive("tool:draw", tool === "draw")
+    this.dock.setActive("tool:erase", tool === "erase")
     this.dock.setActive("tool:underline", tool === "underline")
-    const edge = tool === "moveCanvas" ? "move" : tool === "draw" ? "draw" : tool === "connect" ? "arrow" : null
-    for (const c of this.canvases) c.bar?.setActive(edge)
+    for (const c of this.canvases) c.bar?.setActive(this.edgeToolFor(tool))
     this.dock.setStatus(this.toolHint())
   }
 

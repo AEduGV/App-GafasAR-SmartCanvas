@@ -5,7 +5,7 @@ import {Bounds, CanvasRenderer, retire} from "./CanvasRenderer"
 
 export type Orientation = "horizontal" | "vertical"
 
-const BAR_HALF_WIDTH = 32
+const BAR_HALF_WIDTH = 34
 const BAR_DEPTH = 10
 
 export class CanvasInstance {

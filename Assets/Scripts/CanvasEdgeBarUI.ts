@@ -8,20 +8,21 @@ import {ICON} from "./CanvasIcons"
 import {makePill, paintPill} from "./CanvasPill"
 import {TONE} from "./CanvasTheme"
 
-const BTN_W = 10
+const BTN_W = 9 // la barra debe seguir siendo más estrecha que un canvas de tamaño normal
 const BTN_H = 3.6
 const GAP = 0.8
 const TEXT_SIZE = 56
 // Por delante del contenido del canvas, sobre el que se despliega en una pared.
 const MENU_Z = 1.5
 
-export type EdgeTool = "move" | "draw" | "write" | "arrow"
+export type EdgeTool = "move" | "draw" | "erase" | "write" | "arrow"
 export type EdgeExtra = "group" | "separate"
 export type EdgeAction = EdgeTool | EdgeExtra | "delete" | "shapeMenu"
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
   {action: "move", label: "Mover", icon: ICON.open_with},
   {action: "draw", label: "Dibujar", icon: ICON.draw},
+  {action: "erase", label: "Goma", icon: ICON.ink_eraser},
   {action: "write", label: "Escribir", icon: ICON.edit_note},
   {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
 ]

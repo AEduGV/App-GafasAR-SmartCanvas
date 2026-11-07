@@ -43,6 +43,7 @@ const TOOLS: ButtonDef[] = [
   {label: "Seleccionar", action: "tool:select", icon: ICON.arrow_selector_tool},
   {label: "Conectar", action: "tool:connect", icon: ICON.polyline},
   {label: "Dibujar", action: "tool:draw", icon: ICON.draw},
+  {label: "Goma", action: "tool:erase", icon: ICON.ink_eraser},
   {label: "Subrayar", action: "tool:underline", icon: ICON.format_underlined},
   {label: "Varios", action: "multi", icon: ICON.library_add_check},
 ]

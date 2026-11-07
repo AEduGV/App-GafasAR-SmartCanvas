@@ -152,19 +152,36 @@ export function insideConvex(pts: vec2[], p: vec2): boolean {
   return true
 }
 
+/** Distancia de un punto al segmento a-c. */
+export function segmentDistance(p: vec2, a: vec2, c: vec2): number {
+  const ex = c.x - a.x
+  const ey = c.y - a.y
+  const lengthSq = ex * ex + ey * ey
+  const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / lengthSq)) : 0
+  return Math.hypot(p.x - (a.x + ex * t), p.y - (a.y + ey * t))
+}
+
 /** Distancia de un punto al contorno cerrado. */
 export function outlineDistance(pts: vec2[], p: vec2): number {
   let best = Infinity
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i]
-    const c = pts[(i + 1) % pts.length]
-    const ex = c.x - a.x
-    const ey = c.y - a.y
-    const lengthSq = ex * ex + ey * ey
-    const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / lengthSq)) : 0
-    best = Math.min(best, Math.hypot(p.x - (a.x + ex * t), p.y - (a.y + ey * t)))
-  }
+  for (let i = 0; i < pts.length; i++) best = Math.min(best, segmentDistance(p, pts[i], pts[(i + 1) % pts.length]))
   return best
+}
+
+/** La misma línea con puntos cada `step` como mucho: un trazo de dos puntos también debe poder partirse. */
+export function resamplePolyline(pts: vec2[], step: number): vec2[] {
+  const out: vec2[] = []
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]
+    const c = pts[i + 1]
+    const parts = Math.max(1, Math.ceil(a.distance(c) / step))
+    for (let k = 0; k < parts; k++) {
+      const t = k / parts
+      out.push(new vec2(a.x + (c.x - a.x) * t, a.y + (c.y - a.y) * t))
+    }
+  }
+  if (pts.length > 0) out.push(pts[pts.length - 1])
+  return out
 }
 
 export function appendFill(b: MeshBuilder, pts: vec2[], z: number): void {

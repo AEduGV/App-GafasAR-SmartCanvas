@@ -28,6 +28,7 @@ export const ICON = {
   format_list_numbered: requireAsset("../Icons/format_list_numbered_128x128.png") as Texture,
   format_underlined: requireAsset("../Icons/format_underlined_128x128.png") as Texture,
   hub: requireAsset("../Icons/hub_128x128.png") as Texture,
+  ink_eraser: requireAsset("../Icons/ink_eraser_128x128.png") as Texture,
   join: requireAsset("../Icons/join_128x128.png") as Texture,
   kid_star: requireAsset("../Icons/kid_star_128x128.png") as Texture,
   library_add_check: requireAsset("../Icons/library_add_check_128x128.png") as Texture,
