@@ -2,6 +2,7 @@
 // Licencia Apache 2.0: ver THIRD_PARTY_NOTICES.md. Blancos en el PNG: se tiñen con baseColor.
 export const ICON = {
   account_tree: requireAsset("../Icons/account_tree_128x128.png") as Texture,
+  add: requireAsset("../Icons/add_128x128.png") as Texture,
   add_box: requireAsset("../Icons/add_box_128x128.png") as Texture,
   arrow_selector_tool: requireAsset("../Icons/arrow_selector_tool_128x128.png") as Texture,
   brush: requireAsset("../Icons/brush_128x128.png") as Texture,

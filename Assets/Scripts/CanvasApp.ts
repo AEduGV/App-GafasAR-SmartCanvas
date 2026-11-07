@@ -4,7 +4,7 @@ import {Interactor, InteractorInputType} from "SpectaclesInteractionKit.lspkg/Co
 import WorldCameraFinderProvider from "SpectaclesInteractionKit.lspkg/Providers/CameraProvider/WorldCameraFinderProvider"
 import SIK from "SpectaclesInteractionKit.lspkg/SIK"
 import {CanvasDockUI} from "./CanvasDockUI"
-import {CanvasEdgeBarUI, EdgeAction, EdgeTool} from "./CanvasEdgeBarUI"
+import {CanvasEdgeBarUI, EdgeAction, EdgeTool, RING_RADIUS} from "./CanvasEdgeBarUI"
 import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from "./CanvasDocument"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
@@ -23,6 +23,7 @@ const BORDER_GRAB = 2
 const TAP_SLOP = 1.0
 const DOUBLE_TAP = 0.45
 const STROKE_STEP = 0.5
+const MENU_TILT = 40
 const ERASER_RADIUS = 1.5
 const ERASE_STEP = 0.4
 const FLIP_TIME = 0.4
@@ -192,7 +193,7 @@ export class CanvasApp extends BaseScriptComponent {
   private flipStart = 0
   private flipCanvas: CanvasInstance | null = null
 
-  private shapeMenuCanvas: CanvasInstance | null = null
+  private menuCanvas: CanvasInstance | null = null
   private hoverBorder: CanvasInstance | null = null
 
   // Borrado
@@ -247,7 +248,7 @@ export class CanvasApp extends BaseScriptComponent {
   /** Cambia el canvas sobre el que trabajan las herramientas. */
   private activate(canvas: CanvasInstance): void {
     if (canvas === this.active) return
-    this.closeShapeMenu()
+    this.closeEdgeMenu()
     this.clearSelection()
     this.active = canvas
     this.refreshBorders()
@@ -686,7 +687,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.dock.setStatus(
       this.canvases.length > 1
         ? "Canvas " + this.canvases.length + " listo. Enlázalo con Flecha o júntalo con otro"
-        : "Canvas listo. Crea una nota o una figura"
+        : "Canvas listo. Crea una nota o pulsa + para ver sus herramientas"
     )
     this.log("canvas " + this.active.id + " " + this.orientation + " (total " + this.canvases.length + ")")
   }
@@ -708,25 +709,35 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     const wasWritingHere = this.editing !== null && canvas === this.active
+    const wasOpen = this.menuCanvas === canvas
     if (this.editing) this.finishEditing()
     this.activate(canvas)
     this.log("borde " + canvas.id + " " + action)
-    if (action === "write") {
-      this.closeShapeMenu()
-      if (!wasWritingHere) this.startWriting()
-      return
-    }
-    if (action === "shapeMenu") {
-      const wasOpen = this.shapeMenuCanvas === canvas
-      this.closeShapeMenu()
+    if (action === "menu") {
+      this.closeEdgeMenu()
       if (!wasOpen) {
-        this.shapeMenuCanvas = canvas
-        canvas.bar?.setShapeMenu(true, canvas.renderer.shape)
-        this.dock.setStatus("Elige la forma de este canvas")
+        this.menuCanvas = canvas
+        canvas.bar?.setOpen(true)
+        this.dock.setStatus("Elige una herramienta. Pulsa fuera para cerrar")
       }
       return
     }
-    this.closeShapeMenu()
+    if (action === "shapeMenu") {
+      const open = !canvas.bar?.isShapeOpen
+      canvas.bar?.setShapeMenu(open, canvas.renderer.shape)
+      this.dock.setStatus(open ? "Elige la forma de este canvas" : this.toolHint())
+      return
+    }
+    // La papelera deja el menú abierto: puede hacer falta pulsarla otra vez para confirmar.
+    if (action === "delete") {
+      this.requestDelete(canvas)
+      return
+    }
+    this.closeEdgeMenu()
+    if (action === "write") {
+      if (!wasWritingHere) this.startWriting()
+      return
+    }
     if (action === "group") {
       this.groupWithNeighbours(canvas)
       return
@@ -735,26 +746,23 @@ export class CanvasApp extends BaseScriptComponent {
       this.separateGroup(canvas)
       return
     }
-    if (action === "delete") {
-      this.requestDelete(canvas)
-      return
-    }
     const tool: Tool = action === "move" ? "moveCanvas" : action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
     this.setTool(this.tool === tool ? "select" : tool)
   }
 
   /** Devuelve si había un menú abierto. */
-  private closeShapeMenu(): boolean {
-    const canvas = this.shapeMenuCanvas
+  private closeEdgeMenu(): boolean {
+    const canvas = this.menuCanvas
     if (!canvas) return false
-    this.shapeMenuCanvas = null
+    this.menuCanvas = null
     canvas.bar?.setShapeMenu(false, canvas.renderer.shape)
+    canvas.bar?.setOpen(false)
     this.dock.setStatus(this.toolHint())
     return true
   }
 
   private changeShape(canvas: CanvasInstance, shape: CanvasShape): void {
-    this.closeShapeMenu()
+    this.closeEdgeMenu()
     canvas.renderer.setShape(shape)
     this.refreshGroupOptions()
     this.placeDockForCanvas()
@@ -762,23 +770,21 @@ export class CanvasApp extends BaseScriptComponent {
     this.log("forma " + canvas.id + " " + shape)
   }
 
-  /** En una pared van sobre el borde superior; en una mesa, en el borde cercano e inclinados hacia el usuario. */
+  /** El menú va en la esquina superior derecha. En una mesa se inclina hacia el usuario y se eleva para no hundirse en ella. */
   private updateEdgeBarPose(canvas: CanvasInstance): void {
-    if (canvas.bar) {
-      const show = canvas === this.active || canvas.barFits
-      if (canvas.bar.sceneObject.enabled !== show) canvas.bar.sceneObject.enabled = show
-    }
     const b = canvas.renderer.getBounds()
-    if (!canvas.bar || (b === canvas.barBounds && canvas.orientation === canvas.barOrientation)) return
+    const shape = canvas.renderer.shape
+    if (!canvas.bar || (b === canvas.barBounds && canvas.orientation === canvas.barOrientation && shape === canvas.barShape)) return
     canvas.barBounds = b
     canvas.barOrientation = canvas.orientation
-    canvas.bar.setMenuDirection(canvas.orientation === "horizontal")
-    const cx = (b.minX + b.maxX) / 2
+    canvas.barShape = shape
+    const hub = canvas.hubPoint
     if (canvas.orientation === "vertical") {
-      // Por delante de las notas: en un canvas estrecho la barra sobresale sobre sus vecinos.
-      canvas.bar.setPose(new vec3(cx, b.maxY + 2.8, 1.4), quat.quatIdentity())
+      // Por delante de las notas, sobre las que se despliega.
+      canvas.bar.setPose(new vec3(hub.x, hub.y, 1.4), quat.quatIdentity())
     } else {
-      canvas.bar.setPose(new vec3(cx, b.minY - 2.6, 0.6), quat.angleAxis((55 * Math.PI) / 180, vec3.right()))
+      const tilt = (MENU_TILT * Math.PI) / 180
+      canvas.bar.setPose(new vec3(hub.x, hub.y, 1 + RING_RADIUS * Math.sin(tilt)), quat.angleAxis(tilt, vec3.right()))
     }
   }
 
@@ -978,7 +984,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.refreshGroupOptions()
     this.placeDockForCanvas()
     const near = moved.some((c) => this.neighbours(c).length > 0)
-    this.dock.setStatus(near ? "Canvas juntos: pulsa Agrupar para moverlos a la vez" : this.toolHint())
+    this.dock.setStatus(near ? "Canvas juntos: pulsa + y luego Agrupar para moverlos a la vez" : this.toolHint())
     this.log("canvas movido" + (snapped ? " y pegado" : ""))
   }
 
@@ -1042,7 +1048,7 @@ export class CanvasApp extends BaseScriptComponent {
       armed?.canvas.bar?.setDeleteArmed(false)
       this.deleteArmed = {canvas, until: getTime() + DELETE_CONFIRM_TIME}
       canvas.bar?.setDeleteArmed(true)
-      this.dock.setStatus("Este canvas tiene contenido: pulsa la X otra vez para borrarlo", "warning")
+      this.dock.setStatus("Este canvas tiene contenido: pulsa la papelera otra vez para borrarlo", "warning")
       return
     }
     this.pendingDelete = canvas
@@ -1069,7 +1075,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private removeCanvas(canvas: CanvasInstance): void {
     if (this.deleteArmed?.canvas === canvas) this.deleteArmed = null
-    this.closeShapeMenu()
+    this.closeEdgeMenu()
     this.press = null
     this.clearSelection()
     this.links.removeFor(canvas)
@@ -1141,8 +1147,8 @@ export class CanvasApp extends BaseScriptComponent {
       const samples: vec3[] = []
       for (let x = 0; x <= 4; x++) {
         for (let y = 0; y <= 5; y++) {
-          // La última fila cae sobre la franja de botones del borde.
-          const ly = y === 5 ? (c.orientation === "vertical" ? b.maxY + 4 : b.minY - 3) : b.minY + ((b.maxY - b.minY) * y) / 4
+          // La última fila cae a la altura del botón +.
+          const ly = y === 5 ? b.maxY + 3 : b.minY + ((b.maxY - b.minY) * y) / 4
           samples.push(c.toWorld(new vec3(b.minX + ((b.maxX - b.minX) * x) / 4, ly, 0)))
         }
       }
@@ -1249,7 +1255,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (target && !resolved) return // pulsación sobre un panel o un botón
 
     // Pulsar fuera de un menú abierto solo lo cierra.
-    if (this.closeShapeMenu()) return
+    if (this.closeEdgeMenu()) return
 
     const wasEditing = this.editing !== null
     if (wasEditing) this.finishEditing()
@@ -2062,7 +2068,7 @@ export class CanvasApp extends BaseScriptComponent {
   private onAction(action: string): void {
     const [verb, arg] = action.split(":")
     this.log("accion " + action)
-    this.closeShapeMenu()
+    this.closeEdgeMenu()
     if (this.editing && verb !== "edit") this.finishEditing()
     switch (verb) {
       case "orient":

@@ -1,23 +1,28 @@
-// Botones pegados al borde del canvas. Son hijos del canvas, así que viajan con él.
+// Menú radial de un canvas: un botón + en su esquina que despliega las herramientas a su alrededor.
+// Es hijo del canvas, así que viaja con él. Solo decide cómo se ve: las acciones las resuelve CanvasApp.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
-import {FlexLayout} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexLayout"
-import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {CanvasShape} from "./CanvasGeometry"
 import {ICON} from "./CanvasIcons"
-import {makePill, paintPill} from "./CanvasPill"
+import {makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
 import {TONE} from "./CanvasTheme"
 
-const BTN_W = 9 // la barra debe seguir siendo más estrecha que un canvas de tamaño normal
-const BTN_H = 3.6
-const GAP = 0.8
+const HUB_SIZE = 4.6
+const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
-// Por delante del contenido del canvas, sobre el que se despliega en una pared.
-const MENU_Z = 1.5
+// Radio de cada anillo, con las herramientas tocándose lo justo incluso si aparece Agrupar o Separar.
+export const RING_RADIUS = 10
+const SHAPE_RING_RADIUS = 14.8
+const SHAPE_STEP = 18
+// Arco en grados, desde arriba y hacia la izquierda: hacia dentro del canvas, porque en la esquina
+// derecha un círculo completo se saldría de la franja visible de la Preview.
+const ARC_START = 90
+const ARC_END = 270
+const OPEN_TIME = 0.16
 
 export type EdgeTool = "move" | "draw" | "erase" | "write" | "arrow"
 export type EdgeExtra = "group" | "separate"
-export type EdgeAction = EdgeTool | EdgeExtra | "delete" | "shapeMenu"
+export type EdgeAction = EdgeTool | EdgeExtra | "delete" | "shapeMenu" | "menu"
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
   {action: "move", label: "Mover", icon: ICON.open_with},
@@ -39,20 +44,32 @@ const EXTRAS: {action: EdgeExtra; label: string; icon: Texture}[] = [
   {action: "separate", label: "Separar", icon: ICON.ungroup},
 ]
 
+function polar(angle: number, radius: number): vec3 {
+  const a = (angle * Math.PI) / 180
+  return new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0)
+}
+
 @component
 export class CanvasEdgeBarUI extends BaseScriptComponent {
   private _onAction = new Event<EdgeAction>()
   private _onShape = new Event<CanvasShape>()
+  private hub: CapsuleButton | null = null
+  private ring: SceneObject | null = null
+  private shapeRing: SceneObject | null = null
   private shapeButton: CapsuleButton | null = null
-  private menu: SceneObject | null = null
-  private menuItems = new Map<CanvasShape, CapsuleButton>()
-  private menuOpen = false
-  private menuShape: CanvasShape = "rect"
-  private buttons = new Map<EdgeTool, CapsuleButton>()
-  private extras = new Map<EdgeExtra, SceneObject>()
-  private active: EdgeTool | null = null
   private deleteButton: CapsuleButton | null = null
+  private buttons = new Map<EdgeTool, CapsuleButton>()
+  private extras = new Map<EdgeExtra, CapsuleButton>()
+  private shapeItems = new Map<CanvasShape, CapsuleButton>()
+  // Lo que hay en el arco ahora mismo, en orden, con el ángulo que le toca.
+  private slots: {so: SceneObject; angle: number}[] = []
+  private extra: EdgeExtra | null = null
+  private active: EdgeTool | null = null
   private deleteArmed = false
+  private shapeOpen = false
+  private shapeCurrent: CanvasShape = "rect"
+  private opened = false
+  private progress = 0
 
   get onAction(): PublicApi<EdgeAction> {
     return this._onAction.publicApi()
@@ -62,102 +79,113 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return this._onShape.publicApi()
   }
 
+  get isOpen(): boolean {
+    return this.opened
+  }
+
+  get isShapeOpen(): boolean {
+    return this.shapeOpen
+  }
+
   onAwake(): void {
     this.sceneObject.createComponent("Component.Canvas")
 
-    const rowSo = global.scene.createSceneObject("Tools")
-    rowSo.setParent(this.sceneObject)
-    const row = rowSo.createComponent(FlexLayout.getTypeName()) as FlexLayout
-    const rowWidth = BTN_W * (TOOLS.length + 1) + GAP * TOOLS.length
-    row.width = rowWidth
-    row.height = BTN_H
-    row.direction = FlexDirection.Row
-    row.justifyContent = FlexJustify.Center
-    row.alignItems = FlexAlign.Center
-    row.columnGap = GAP
+    this.ring = global.scene.createSceneObject("Ring")
+    this.ring.setParent(this.sceneObject)
+
     for (const def of TOOLS) {
-      const btn = makePill(
-        rowSo,
-        def.label,
-        BTN_W,
-        BTN_H,
-        TEXT_SIZE,
-        () => this.active === def.action,
-        () => this._onAction.invoke(def.action),
-        def.icon
-      )
-      this.buttons.set(def.action, btn)
+      this.buttons.set(def.action, this.makeItem(this.ring, def.label, def.icon, () => this.active === def.action, () => this._onAction.invoke(def.action)))
     }
-
-    this.shapeButton = makePill(
-      rowSo,
-      "Forma",
-      BTN_W,
-      BTN_H,
-      TEXT_SIZE,
-      () => this.menuOpen,
-      () => this._onAction.invoke("shapeMenu"),
-      ICON.category
-    )
-
-    this.menu = global.scene.createSceneObject("ShapeMenu")
-    this.menu.setParent(this.sceneObject)
-    this.menu.getTransform().setLocalPosition(new vec3(rowWidth / 2 - BTN_W / 2, 0, MENU_Z))
-    for (const def of SHAPES) {
-      const item = makePill(
-        this.menu,
-        def.label,
-        BTN_W,
-        BTN_H,
-        TEXT_SIZE,
-        () => this.menuShape === def.shape,
-        () => this._onShape.invoke(def.shape),
-        def.icon
-      )
-      this.menuItems.set(def.shape, item)
-    }
-    this.setMenuDirection(false)
-    this.menu.enabled = false
-
-    // La X queda aparte de las herramientas para no pulsarla sin querer.
-    const closeHolder = global.scene.createSceneObject("Borrar")
-    closeHolder.setParent(this.sceneObject)
-    closeHolder.getTransform().setLocalPosition(new vec3(rowWidth / 2 + GAP * 1.5 + BTN_H / 2, 0, 0))
-    this.deleteButton = makePill(
-      closeHolder,
-      "Borrar canvas",
-      BTN_H,
-      BTN_H,
-      TEXT_SIZE,
-      () => this.deleteArmed,
-      () => this._onAction.invoke("delete"),
-      ICON.close
-    )
-
-    // Agrupar o Separar solo aparecen cuando tienen sentido, en una fila propia sobre las herramientas
-    // para que la barra de un canvas pegado no los tape.
+    this.shapeButton = this.makeItem(this.ring, "Forma", ICON.category, () => this.shapeOpen, () => this._onAction.invoke("shapeMenu"))
     for (const def of EXTRAS) {
-      const holder = global.scene.createSceneObject(def.label)
-      holder.setParent(this.sceneObject)
-      holder.getTransform().setLocalPosition(new vec3(0, BTN_H + GAP, 0))
-      makePill(
-        holder,
-        def.label,
-        BTN_W,
-        BTN_H,
-        TEXT_SIZE,
-        () => false,
-        () => this._onAction.invoke(def.action),
-        def.icon
-      )
-      holder.enabled = false
-      this.extras.set(def.action, holder)
+      this.extras.set(def.action, this.makeItem(this.ring, def.label, def.icon, () => false, () => this._onAction.invoke(def.action)))
     }
+    this.deleteButton = this.makeItem(this.ring, "Borrar canvas", ICON.delete, () => this.deleteArmed, () => this._onAction.invoke("delete"))
+
+    this.shapeRing = global.scene.createSceneObject("ShapeRing")
+    this.shapeRing.setParent(this.ring)
+    for (const def of SHAPES) {
+      this.shapeItems.set(def.shape, this.makeItem(this.shapeRing, def.label, def.icon, () => this.shapeCurrent === def.shape, () => this._onShape.invoke(def.shape)))
+    }
+    this.shapeRing.enabled = false
+
+    this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
+
+    this.layout()
+    this.ring.enabled = false
+    this.createEvent("UpdateEvent").bind(() => this.animate())
   }
 
+  private makeItem(parent: SceneObject, label: string, icon: Texture, isActive: () => boolean, onPress: () => void): CapsuleButton {
+    return makePill(parent, label, ITEM_SIZE, ITEM_SIZE, TEXT_SIZE, isActive, onPress, icon)
+  }
+
+  /** Reparte en el arco lo que se ve ahora: Agrupar o Separar solo cuando tienen sentido. */
+  private layout(): void {
+    const list: CapsuleButton[] = TOOLS.map((def) => this.buttons.get(def.action))
+    list.push(this.shapeButton)
+    this.extras.forEach((btn, key) => {
+      btn.sceneObject.enabled = key === this.extra
+      if (key === this.extra) list.push(btn)
+    })
+    list.push(this.deleteButton)
+    const step = (ARC_END - ARC_START) / (list.length - 1)
+    this.slots = list.map((btn, i) => ({so: btn.sceneObject, angle: ARC_START + step * i}))
+    const shapeSlot = this.slots.find((s) => s.so === this.shapeButton.sceneObject)
+    let i = 0
+    for (const def of SHAPES) {
+      const offset = (i++ - (SHAPES.length - 1) / 2) * SHAPE_STEP
+      this.shapeItems.get(def.shape)?.sceneObject.getTransform().setLocalPosition(polar(shapeSlot.angle + offset, SHAPE_RING_RADIUS))
+    }
+    this.applyProgress()
+  }
+
+  private applyProgress(): void {
+    const k = this.progress
+    const e = k * k * (3 - 2 * k)
+    const scale = Math.max(e, 0.01)
+    for (const slot of this.slots) {
+      const t = slot.so.getTransform()
+      t.setLocalPosition(polar(slot.angle, RING_RADIUS * e))
+      t.setLocalScale(new vec3(scale, scale, scale))
+    }
+    if (this.hub) setPillIconRotation(this.hub, this.showsPlus() ? (e * Math.PI) / 4 : 0)
+  }
+
+  private animate(): void {
+    const target = this.opened ? 1 : 0
+    if (this.progress === target) return
+    const delta = getDeltaTime() / OPEN_TIME
+    this.progress = target > this.progress ? Math.min(1, this.progress + delta) : Math.max(0, this.progress - delta)
+    this.applyProgress()
+    if (this.progress === 0 && this.ring) this.ring.enabled = false
+  }
+
+  private showsPlus(): boolean {
+    return this.opened || this.active === null
+  }
+
+  private refreshHub(): void {
+    if (!this.hub) return
+    const tool = TOOLS.find((def) => def.action === this.active)
+    setPillIcon(this.hub, this.showsPlus() || !tool ? ICON.add : tool.icon)
+    paintPill(this.hub, this.opened || this.active !== null)
+    this.applyProgress()
+  }
+
+  setOpen(open: boolean): void {
+    if (open === this.opened) return
+    this.opened = open
+    if (open && this.ring) this.ring.enabled = true
+    if (!open) this.setShapeMenu(false, this.shapeCurrent)
+    this.refreshHub()
+  }
+
+  /** Con el menú cerrado, el botón + muestra la herramienta activa. */
   setActive(action: EdgeTool | null): void {
     this.active = action
     this.buttons.forEach((btn, key) => paintPill(btn, key === action))
+    this.refreshHub()
   }
 
   /** Color de aviso mientras espera la segunda pulsación que confirma el borrado. */
@@ -167,26 +195,17 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   }
 
   setShapeMenu(open: boolean, current: CanvasShape): void {
-    this.menuOpen = open
-    this.menuShape = current
-    if (this.menu) this.menu.enabled = open
+    this.shapeOpen = open
+    this.shapeCurrent = current
+    if (this.shapeRing) this.shapeRing.enabled = open
     if (this.shapeButton) paintPill(this.shapeButton, open)
-    this.menuItems.forEach((btn, shape) => paintPill(btn, shape === current))
-  }
-
-  /** En una pared cae sobre el canvas; en una mesa se levanta, porque hacia abajo no hay sitio. */
-  setMenuDirection(upward: boolean): void {
-    let index = 1
-    for (const def of SHAPES) {
-      const y = (upward ? 1 : -1) * (BTN_H + GAP) * index++
-      this.menuItems.get(def.shape)?.sceneObject.getTransform().setLocalPosition(new vec3(0, y, 0))
-    }
+    this.shapeItems.forEach((btn, shape) => paintPill(btn, shape === current))
   }
 
   showExtra(extra: EdgeExtra | null): void {
-    this.extras.forEach((holder, key) => {
-      holder.enabled = key === extra
-    })
+    if (extra === this.extra) return
+    this.extra = extra
+    this.layout()
   }
 
   setPose(position: vec3, rotation: quat): void {

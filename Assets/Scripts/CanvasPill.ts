@@ -68,7 +68,18 @@ export function setPillHintListener(fn: (label: string | null) => void): void {
   hintListener = fn
 }
 
-function makeIcon(parent: SceneObject, icon: Texture, height: number): void {
+const icons = new WeakMap<CapsuleButton, Image>()
+
+export function setPillIcon(btn: CapsuleButton, icon: Texture): void {
+  const image = icons.get(btn)
+  if (image) image.mainPass.baseTex = icon
+}
+
+export function setPillIconRotation(btn: CapsuleButton, radians: number): void {
+  icons.get(btn)?.getSceneObject().getTransform().setLocalRotation(quat.fromEulerAngles(0, 0, radians))
+}
+
+function makeIcon(parent: SceneObject, icon: Texture, height: number): Image {
   const so = global.scene.createSceneObject("Icon")
   so.setParent(parent)
   const t = so.getTransform()
@@ -80,6 +91,7 @@ function makeIcon(parent: SceneObject, icon: Texture, height: number): void {
   image.mainPass.baseTex = icon
   image.mainPass.baseColor = COLOR.text
   image.stretchMode = StretchMode.Stretch
+  return image
 }
 
 export function makePill(
@@ -104,7 +116,7 @@ export function makePill(
   item.overrideHeight = height
 
   if (icon) {
-    makeIcon(so, icon, height)
+    icons.set(btn, makeIcon(so, icon, height))
     btn.onInitialized.add(() => {
       btn.onHoverEnter.add(() => hintListener?.(label))
       btn.onHoverExit.add(() => hintListener?.(null))

@@ -43,12 +43,12 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 - **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar activo, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
 - **Cambiar el tamaño:** con Seleccionar, arrastrar el borde mueve ese lado y deja fijo el opuesto; desde una esquina, dos lados. Hay una franja de 2 unidades a cada lado del borde, que se ilumina al apuntarla. Mínimo 12×8, máximo 260, y nunca deja contenido fuera. Un elemento o botón encima del borde tiene prioridad.
 - **Goma:** junto a Dibujar, en el panel y en la barra. Arrastrarla borra solo la parte de los trazos que toca y los parte si hace falta; los trozos son trazos normales. No afecta a notas ni figuras, pero sí a subrayados y a las líneas de vida de la plantilla de secuencia, que también son trazos. Un anillo muestra su alcance (radio de 1,5 unidades).
-- **Barra del borde de cada canvas:** Mover, Dibujar, Goma, Escribir, Flecha, Forma y ×. Agrupar o Separar aparecen en una fila aparte cuando tienen sentido.
+- **Menú radial de cada canvas:** un botón + en la esquina superior derecha (en otras formas, en su borde en esa dirección). Al pulsarlo, gira y despliega en semicírculo Mover, Dibujar, Goma, Escribir, Flecha, Forma y papelera, más Agrupar o Separar cuando tienen sentido. Forma abre un segundo arco. Se cierra al elegir una herramienta o al pulsar fuera; con el menú cerrado, el + muestra en cian la herramienta activa.
 - **Escribir:** edita el elemento seleccionado o crea un texto nuevo, y se escribe con el teclado. Pulsar fuera termina y deselecciona, sin empezar otro canvas. Si no se escribió nada, el texto nuevo desaparece. Máximo 80 caracteres; un texto o nota vaciado recupera el anterior; la caja crece hacia abajo. Borrar un elemento pide una segunda pulsación en 3 segundos.
 - **Mover:** el contenido viaja con el canvas. Al apuntar a una superficie de otra orientación, gira y se pega a ella con todo su contenido, también en grupo.
 - **Formas:** Rectángulo, Óvalo, Triángulo y Rombo, con un menú desplegable. Dibujo, clics y flechas respetan la forma real.
 - **Varios canvas:** flechas entre ellos que siguen a sus canvas, y Agrupar al juntarlos para moverlos a la vez.
-- **Borrar un canvas (×):** directo si está vacío; con contenido pide una segunda pulsación en 3 segundos.
+- **Borrar un canvas (papelera del menú radial):** directo si está vacío; con contenido pide una segunda pulsación en 3 segundos.
 - **Panel principal:** notas, texto, pantallas, figuras, diagramas de flujo, puertas lógicas, marcadores, stickers, plantillas, capas, agrupar elementos, conectar bloques.
 
 ## Pendiente de la especificación
@@ -79,7 +79,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - **Destruir objetos:** usar `retire()`, nunca `destroy()` directo en algo con `Interactable`. El cursor de SIK guarda objetos en caché y lanza "Object is null" si ya no existen. Además, borrar un canvas se aplaza fuera del evento de su propio botón.
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
 - **Crecer con el contenido:** un rectángulo crece por el lado necesario. Las demás formas crecen lo mínimo y se desplazan lo mínimo (`fitShapeToContent`). El triángulo apoya el contenido en la base. `shapeBase` recupera el tamaño al volver a otra forma.
-- **Barra en canvas estrechos:** si el canvas es más estrecho que la barra (68 unidades, `BAR_HALF_WIDTH` en `CanvasInstance.ts`), solo se muestra en el canvas activo, para no pisar la de los vecinos.
+- **Arco del menú radial:** semicírculo hacia el interior del canvas (`ARC_START` y `ARC_END` en `CanvasEdgeBarUI.ts`), y el + dentro de la esquina (`HUB_INSET`). Un círculo completo o el + por fuera se cortan con la franja visible de la Preview en un canvas normal, que llega casi a su límite. Sobre una mesa se inclina 40° y se eleva: plano se hundiría en la superficie.
 - **Añadir un icono:** bajar el SVG `symbols/web/<nombre>/materialsymbolsrounded/<nombre>_wght600_48px.svg` de la revisión anotada en `THIRD_PARTY_NOTICES.md`, añadirle `fill="#ffffff"`, copiarlo a `Assets/Icons/`, convertirlo con `ConvertSvgToTexture` a 128 px, borrar el SVG y añadirlo a `CanvasIcons.ts`. Los botones de solo icono se pintan con `Component.Image` y el material `Image.mat` de UIKit.
 - **Git y PNG:** mientras `.gitattributes` no esté subido, añadir los binarios sin LFS: `git -c filter.lfs.process= -c filter.lfs.clean= -c filter.lfs.smudge= -c filter.lfs.required=false add <archivos>`. Hay que vaciar también `process`: solo con `clean` se guardan punteros. Comprobar antes de subir que `git cat-file -p :<archivo> | head -c 4` da `PNG` y no `vers`. El commit `7d73faa` quedó con punteros por este motivo y lo corrige el siguiente.
 - **Contraste:** el alfa del panel (0,92) y del canvas (0,75) está elegido para que el texto llegue a 4,5:1 aunque detrás haya blanco. Medido con la fórmula WCAG, no en gafas. `BackPlate` solo ofrece grises fijos, por eso el panel lleva encima un fondo propio (`PlateFill`).
@@ -90,7 +90,6 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - El canvas no terminaba al segundo clic: la superficie recién creada se tomaba por una pulsación en el panel.
 - El panel tapaba mesas y canvas: es compacto al colocar, y elige el lado que menos tapa.
 - Letras de los botones cortadas: `LABEL_Z = 0.35`.
-- Separar quedaba oculto por la barra vecina: va en su propia fila.
 - Clic fuera demasiado sensible: el margen se limita a la franja real de botones.
 - Excepciones del cursor al borrar: se resuelve con `retire()`.
 - Triángulo sin base visible: `subdivide()` en el contorno.
@@ -108,7 +107,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Cambiar el tamaño solo funciona con Seleccionar: con Mover, Dibujar o Flecha, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
 - El borde de un canvas inactivo (`#A0B1C5` al 60 %) da 3,55:1 sobre `#182230`, pero baja a 2,11:1 si detrás hay blanco. En gafas, el contraste real está sin medir.
 - `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
-- En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y la barra de un canvas pequeño cerca del borde puede quedar fuera.
+- En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y el menú radial de un canvas cerca del borde puede quedar fuera. El + cubre la parte interior de la esquina superior derecha: para cambiar el tamaño desde ella, hay que agarrar por fuera. Sobre una mesa, el menú se ve pequeño e inclinado, y queda en la esquina lejana porque no se adapta a quien mira desde el otro lado.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
 - Sin probar: Escribir con teclado y ratón reales, sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular, llevar de mesa a pared un canvas con forma, una flecha entre un canvas con forma y otro bien separado.
 
@@ -120,6 +119,7 @@ Usar `RecompileTypeScriptTool`, `RunAndCollectLogsTool`, `InjectPreviewGesture` 
 
 Particularidades de los clics simulados, que pueden parecer fallos sin serlo:
 
+- Un `touch move` a un sitio nuevo dispara un `onTriggerStart` fantasma con el objetivo anterior y el rayo ya en el punto nuevo. Si el objetivo anterior era un botón no pasa nada, pero si era la superficie y el punto está fuera, empieza otro canvas. Tras cerrarse un menú, no hacer un `touch move` suelto fuera del canvas.
 - No generan hover. Para pulsar de forma fiable: `touch move` dos veces en el punto, `touch start` + `end` (solo actualiza el objetivo), y otro `touch start` + `end` (pulsa de verdad). Para arrastrar, ese segundo `start` va seguido de los `move` y el `end`.
 - Entre dos llamadas pasan segundos: las dobles pulsaciones con plazo, como Borrar, deben ir en un mismo envío. Dos pulsaciones sobre un elemento cuentan como doble clic y abren la edición.
 - Tras marcar la primera esquina hay que dejar unos 500 ms, porque la consulta de superficie es asíncrona.
