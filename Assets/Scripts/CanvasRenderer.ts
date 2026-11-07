@@ -25,8 +25,8 @@ const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
 const BODY_SIZE = 64
 const TITLE_SIZE = 72
-// Con este alfa, el texto sobre el canvas llega a 4,5:1 aunque detrás haya blanco.
-const SURFACE_ALPHA = 0.75
+// Casi transparente: el canvas se lee por sus bordes. El texto suelto pierde contraste sobre fondos claros.
+const SURFACE_ALPHA = 0.25
 // Grosor de la lámina, hacia detrás de la cara: de lado se ve como una hoja, no como un plano que desaparece.
 const SHEET_DEPTH = 0.4
 const SHEET_FRONT = -0.05
