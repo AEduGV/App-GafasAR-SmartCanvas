@@ -791,7 +791,15 @@ export class CanvasApp extends BaseScriptComponent {
       if (!wasOpen) {
         this.menuCanvas = canvas
         canvas.bar?.setOpen(true)
-        this.dock.setStatus("Elige una herramienta. Pulsa fuera para cerrar")
+        this.dock.setStatus(
+          this.tool === "select"
+            ? "Elige una herramienta. Pulsa fuera para cerrar"
+            : "Elige otra herramienta o pulsa el centro para soltar la actual"
+        )
+      } else if (this.tool !== "select") {
+        // Con el menú abierto, el centro suelta la herramienta: el canvas vuelve a moverse y estirarse.
+        this.setTool("select")
+        this.dock.setStatus("Herramienta desactivada")
       }
       return
     }
@@ -812,7 +820,8 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     const tool: Tool = action === "draw" ? "draw" : action === "erase" ? "erase" : "connect"
-    this.setTool(this.tool === tool ? "select" : tool)
+    // Elegir una herramienta siempre la activa; para soltarla se pulsa el centro con el menú abierto.
+    this.setTool(tool)
   }
 
   /** Devuelve si había un menú abierto. */
