@@ -10,15 +10,13 @@ import {TONE} from "./CanvasTheme"
 const HUB_SIZE = 4.6
 const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
-// Un cuarto de círculo hacia dentro del canvas, de la izquierda (180°) hacia abajo (270°), para que el
-// menú quede entero sobre él. En dos anillos, para que los botones no se peguen, con los del exterior
-// en los huecos que dejan los del interior.
-const INNER_RADIUS = 7.5
-export const RING_RADIUS = 13
-export const SHAPE_RING_RADIUS = 19
-const INNER_ANGLES = [180, 225, 270]
-const OUTER_ANGLES = [198, 225, 252]
-const SHAPE_STEP = 15
+// Semicírculo de un solo anillo, desde arriba (90°) hacia la izquierda y abajo (270°): hacia dentro del
+// canvas, porque en la esquina derecha un círculo completo se saldría de la franja visible de la Preview.
+export const RING_RADIUS = 10
+export const SHAPE_RING_RADIUS = 14.8
+const ARC_START = 90
+const ARC_END = 270
+const SHAPE_STEP = 18
 const OPEN_TIME = 0.16
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
@@ -112,14 +110,13 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return btn
   }
 
-  /** Dibujar, Goma y Escribir en el anillo interior; Flecha, Forma y la papelera en el exterior. */
+  /** Reparte las herramientas por igual en el semicírculo. */
   private layout(): void {
-    const inner: CapsuleButton[] = [this.buttons.get("draw"), this.buttons.get("erase"), this.buttons.get("write")]
-    const outer: CapsuleButton[] = [this.buttons.get("arrow"), this.shapeButton, this.deleteButton]
-    this.slots = [
-      ...inner.map((btn, i) => ({so: btn.sceneObject, angle: INNER_ANGLES[i], radius: INNER_RADIUS})),
-      ...outer.map((btn, i) => ({so: btn.sceneObject, angle: OUTER_ANGLES[i], radius: RING_RADIUS})),
-    ]
+    const list: CapsuleButton[] = TOOLS.map((def) => this.buttons.get(def.action))
+    list.push(this.shapeButton)
+    list.push(this.deleteButton)
+    const step = (ARC_END - ARC_START) / (list.length - 1)
+    this.slots = list.map((btn, i) => ({so: btn.sceneObject, angle: ARC_START + step * i, radius: RING_RADIUS}))
     const shapeSlot = this.slots.find((s) => s.so === this.shapeButton.sceneObject)
     let i = 0
     for (const def of SHAPES) {
