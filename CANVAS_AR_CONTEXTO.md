@@ -27,7 +27,8 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Superficie: mesa y pared.
 - Colores: aplicado el `design.md` revisado, en `CanvasTheme.ts`. Botones con fondo `#182230`, etiqueta `#F4F7FA` y el estado en el borde: `#C8D2DE` en reposo, `#73D8FF` y más grueso si está activo, `#FFD27A` en una confirmación, y al pulsar `#B3BFCD` o `#59BFE8` y aún más grueso. Canvas con `#182230` al 75 % y borde `#A0B1C5`. Avisos y errores llevan los prefijos «Aviso:» y «Error:».
 - Fuera de `design.md`: el amarillo de notas pasa a `#806a00` para llegar a 4,5:1, el ámbar pulsado es `#E0B662`, y avisos y errores llevan texto pero no icono. Sin uso porque sus funciones están fuera: `#8FE3B0` (guardado) y los colores de categoría.
-- (2026-11-07) Los botones del panel y de la barra llevan iconos de Material Symbols sacados de `google/material-design-icons` (ver `THIRD_PARTY_NOTICES.md`), y su nombre aparece en la línea de estado al apuntarlos. Siguen en texto las puertas lógicas y los colores, que no tienen un icono que los distinga.
+- (2026-11-07) Los botones del panel y del menú radial llevan iconos de Material Symbols sacados de `google/material-design-icons` (ver `THIRD_PARTY_NOTICES.md`), y su nombre aparece en la línea de estado al apuntarlos. Siguen en texto las puertas lógicas y los colores, que no tienen un icono que los distinga.
+- (2026-11-07) `README.md` y `EyeCanvas-AppIcon.png`, en la raíz, son de Alba Anton: no tocarlos ni tomarlos como referencia. Su nombre (EyeCanvas), su demo con versiones y sus enlaces no describen este proyecto ni mandan sobre el alcance.
 - (2026-11-07) Cambiar el tamaño queda desactivado con Mover. No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
 - Categorías, imágenes, comentarios y captura quedan fuera por ahora. No mostrar «Modo individual».
 - Voz: no intentarla por ahora. El botón Escribir con el teclado la simula. Se escribe en inglés y las limitaciones del teclado se quedan así.
@@ -40,13 +41,13 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 
 ## Qué funciona hoy
 
-- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar activo, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
+- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar o la goma activos, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
 - **Cambiar el tamaño:** con Seleccionar, arrastrar el borde mueve ese lado y deja fijo el opuesto; desde una esquina, dos lados. Hay una franja de 2 unidades a cada lado del borde, que se ilumina al apuntarla. Mínimo 12×8, máximo 260, y nunca deja contenido fuera. Un elemento o botón encima del borde tiene prioridad.
-- **Goma:** junto a Dibujar, en el panel y en la barra. Arrastrarla borra solo la parte de los trazos que toca y los parte si hace falta; los trozos son trazos normales. No afecta a notas ni figuras, pero sí a subrayados y a las líneas de vida de la plantilla de secuencia, que también son trazos. Un anillo muestra su alcance (radio de 1,5 unidades).
+- **Goma:** junto a Dibujar, en el panel y en el menú radial. Arrastrarla borra solo la parte de los trazos que toca y los parte si hace falta; los trozos son trazos normales. No afecta a notas ni figuras, pero sí a subrayados y a las líneas de vida de la plantilla de secuencia, que también son trazos. Un anillo muestra su alcance (radio de 1,5 unidades).
 - **Menú radial de cada canvas:** un botón + en la esquina superior derecha (en otras formas, en su borde en esa dirección). Al pulsarlo, gira y despliega en semicírculo Mover, Dibujar, Goma, Escribir, Flecha, Forma y papelera, más Agrupar o Separar cuando tienen sentido. Forma abre un segundo arco. Se cierra al elegir una herramienta o al pulsar fuera; con el menú cerrado, el + muestra en cian la herramienta activa.
 - **Escribir:** edita el elemento seleccionado o crea un texto nuevo, y se escribe con el teclado. Pulsar fuera termina y deselecciona, sin empezar otro canvas. Si no se escribió nada, el texto nuevo desaparece. Máximo 80 caracteres; un texto o nota vaciado recupera el anterior; la caja crece hacia abajo. Borrar un elemento pide una segunda pulsación en 3 segundos.
 - **Mover:** el contenido viaja con el canvas. Al apuntar a una superficie de otra orientación, gira y se pega a ella con todo su contenido, también en grupo.
-- **Formas:** Rectángulo, Óvalo, Triángulo y Rombo, con un menú desplegable. Dibujo, clics y flechas respetan la forma real.
+- **Formas:** Rectángulo, Óvalo, Triángulo y Rombo, en el segundo arco del menú radial. Dibujo, clics y flechas respetan la forma real.
 - **Varios canvas:** flechas entre ellos que siguen a sus canvas, y Agrupar al juntarlos para moverlos a la vez.
 - **Borrar un canvas (papelera del menú radial):** directo si está vacío; con contenido pide una segunda pulsación en 3 segundos.
 - **Panel principal:** notas, texto, pantallas, figuras, diagramas de flujo, puertas lógicas, marcadores, stickers, plantillas, capas, agrupar elementos, conectar bloques.
@@ -59,16 +60,16 @@ Imágenes, comentarios, captura y alineación con objetos físicos. Nada de esto
 
 | Archivo | Papel |
 |---|---|
-| `CanvasApp.ts` | Controlador: colocación, entrada, herramientas, mover, grupos, borrado |
-| `CanvasInstance.ts` | Un canvas: documento, pose, escala, grupo, barra |
+| `CanvasApp.ts` | Controlador: colocación, entrada, herramientas, mover, cambiar el tamaño, goma, grupos, borrado |
+| `CanvasInstance.ts` | Un canvas: documento, pose, escala, grupo, menú radial |
 | `CanvasDocument.ts` | Modelo de datos de elementos y conexiones de un canvas, con eventos. No dibuja |
 | `CanvasRenderer.ts` | Dibuja el documento y la superficie. Forma, límites y `retire()` para destruir objetos |
 | `CanvasGeometry.ts` | Contornos, rellenos, trazos y tubos con `MeshBuilder` |
 | `CanvasLinks.ts` | Flechas entre canvas: guardan quién enlaza con quién y se recalculan según las poses |
-| `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit |
+| `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit: panel, menú radial de cada canvas (conserva el nombre de cuando era una barra) y botones |
 | `CanvasTemplates.ts`, `CanvasTheme.ts`, `CanvasIcons.ts` | Plantillas, colores e iconos |
 
-La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`. Los canvas y sus barras se crean en ejecución.
+La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`. Los canvas y sus menús radiales se crean en ejecución.
 
 ## Decisiones que no hay que deshacer
 
@@ -79,7 +80,7 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - **Destruir objetos:** usar `retire()`, nunca `destroy()` directo en algo con `Interactable`. El cursor de SIK guarda objetos en caché y lanza "Object is null" si ya no existen. Además, borrar un canvas se aplaza fuera del evento de su propio botón.
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
 - **Crecer con el contenido:** un rectángulo crece por el lado necesario. Las demás formas crecen lo mínimo y se desplazan lo mínimo (`fitShapeToContent`). El triángulo apoya el contenido en la base. `shapeBase` recupera el tamaño al volver a otra forma.
-- **Arco del menú radial:** semicírculo hacia el interior del canvas (`ARC_START` y `ARC_END` en `CanvasEdgeBarUI.ts`), y el + dentro de la esquina (`HUB_INSET`). Un círculo completo o el + por fuera se cortan con la franja visible de la Preview en un canvas normal, que llega casi a su límite. Sobre una mesa se inclina 40° y se eleva: plano se hundiría en la superficie.
+- **Arco del menú radial:** semicírculo hacia el interior del canvas (`ARC_START` y `ARC_END` en `CanvasEdgeBarUI.ts`), confirmado por el usuario el 2026-11-07, y el + dentro de la esquina (`HUB_INSET`). Un círculo completo o el + por fuera se cortan con la franja visible de la Preview en un canvas normal, que llega casi a su límite. Sobre una mesa se inclina 40° y se eleva: plano se hundiría en la superficie.
 - **Añadir un icono:** bajar el SVG `symbols/web/<nombre>/materialsymbolsrounded/<nombre>_wght600_48px.svg` de la revisión anotada en `THIRD_PARTY_NOTICES.md`, añadirle `fill="#ffffff"`, copiarlo a `Assets/Icons/`, convertirlo con `ConvertSvgToTexture` a 128 px, borrar el SVG y añadirlo a `CanvasIcons.ts`. Los botones de solo icono se pintan con `Component.Image` y el material `Image.mat` de UIKit.
 - **Git LFS (2026-11-07):** el repositorio sigue el `.gitattributes` de Lens Studio, así que imágenes, fuentes y paquetes de `Assets/` y `Packages/` van en LFS. Basta con un `git add` normal, sin ningún paso especial. Clonar sin Git LFS instalado da archivos de texto en lugar de binarios. Alba no abre el proyecto en su ordenador: solo edita documentos en GitHub.
 - **Contraste:** el alfa del panel (0,92) y del canvas (0,75) está elegido para que el texto llegue a 4,5:1 aunque detrás haya blanco. Medido con la fórmula WCAG, no en gafas. `BackPlate` solo ofrece grises fijos, por eso el panel lleva encima un fondo propio (`PlateFill`).
@@ -90,10 +91,10 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - El canvas no terminaba al segundo clic: la superficie recién creada se tomaba por una pulsación en el panel.
 - El panel tapaba mesas y canvas: es compacto al colocar, y elige el lado que menos tapa.
 - Letras de los botones cortadas: `LABEL_Z = 0.35`.
-- Clic fuera demasiado sensible: el margen se limita a la franja real de botones.
+- Clic fuera demasiado sensible: el margen se limita a la zona real del menú radial (`onEdgeBar`).
 - Excepciones del cursor al borrar: se resuelve con `retire()`.
 - Triángulo sin base visible: `subdivide()` en el contorno.
-- Barra tapada por notas vecinas: va en z = 1,4 sobre una pared.
+- Menú tapado por notas: va en z = 1,4 sobre una pared.
 - Triángulo unas 3 veces mayor que el rectángulo al meter una nota: ahora unas 1,6 veces.
 
 ## Límites conocidos
@@ -104,12 +105,13 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Marcar o soltar sobre el canto de un objeto orienta el canvas según esa cara. Se corrige moviéndolo.
 - Mover no salta entre superficies de la misma orientación a distinta altura, como de una mesa al suelo. Es a propósito, para que no se caiga al pasar por el borde.
 - Un triángulo no puede contener un rectángulo con menos del doble de su área: es geometría, no un fallo.
-- Cambiar el tamaño solo funciona con Seleccionar: con Mover, Dibujar o Flecha, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
+- Cambiar el tamaño solo funciona con Seleccionar: con otra herramienta, la franja interior del borde hace lo propio de esa herramienta, y la exterior no hace nada. Si el panel tapa un borde, ese borde no se puede agarrar.
 - El borde de un canvas inactivo (`#A0B1C5` al 60 %) da 3,55:1 sobre `#182230`, pero baja a 2,11:1 si detrás hay blanco. En gafas, el contraste real está sin medir.
 - `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
 - En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y el menú radial de un canvas cerca del borde puede quedar fuera. El + cubre la parte interior de la esquina superior derecha: para cambiar el tamaño desde ella, hay que agarrar por fuera. Sobre una mesa, el menú se ve pequeño e inclinado, y queda en la esquina lejana porque no se adapta a quien mira desde el otro lado.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
-- Sin probar: Escribir con teclado y ratón reales, sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular, llevar de mesa a pared un canvas con forma, una flecha entre un canvas con forma y otro bien separado.
+- Sin probar con el ratón real (todo lo hecho el 2026-11-07 se probó con clics simulados): el nombre del botón al apuntarlo, y que tras elegir una herramienta del menú radial mover el cursor fuera del canvas no empiece otro, que en la simulación sí ocurre.
+- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; Agrupar y Separar en el menú radial; cerrar el menú pulsando fuera; la goma en otras capas o sobre una mesa.
 
 ## Cómo probar sin romper nada
 
@@ -139,3 +141,11 @@ Di siempre qué se probó con clics simulados y qué no: el usuario prueba con s
 
 `https://github.com/AEduGV/App-GafasAR-SmartCanvas.git`, rama `main`. El usuario pidió ir subiendo los cambios: al terminar y probar un cambio, haz commit y `git push`.
 Nunca subir claves ni credenciales (`*.pem`, `.mcp.json`, `mcp.json`, `.codex/`, `.claude/`). Antes de añadir un tipo de archivo nuevo, comprueba `.gitignore`.
+Alba Anton también sube a `main` desde la web de GitHub: haz `git fetch` antes de subir o de apoyarte en una guía, integra con rebase y nunca fuerces. Verifica el commit antes de hacer push, en un paso separado.
+
+## Preguntas abiertas para el usuario
+
+- Si Mover, Flecha y Subrayar deben dejar de iniciar otro canvas al pulsar fuera, como ya hacen Dibujar y la goma.
+- Si añadir Deshacer. No existe, así que lo borrado, también con la goma, no se recupera.
+- Si la goma debe respetar subrayados y líneas de vida de la plantilla de secuencia.
+- Si cambiar los iconos menos claros: Lógica, Rombo y Decisión, Agrupar, Colocar de nuevo, Colocar delante, Horizontal y Vertical.
