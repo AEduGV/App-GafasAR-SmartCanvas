@@ -28,7 +28,7 @@ const TITLE_SIZE = 72
 // Con este alfa, el texto sobre el canvas llega a 4,5:1 aunque detrás haya blanco.
 const SURFACE_ALPHA = 0.75
 // Grosor de la lámina, hacia detrás de la cara: de lado se ve como una hoja, no como un plano que desaparece.
-const SHEET_DEPTH = 0.8
+const SHEET_DEPTH = 0.4
 const SHEET_FRONT = -0.05
 const SCREEN_ALPHA = 0.9
 
@@ -456,8 +456,8 @@ export class CanvasRenderer {
     this.root = root
     this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.surface, SURFACE_ALPHA), false)
     this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", COLOR.outline, false)
-    this.sheetEdge = new MeshSlot(root, "SheetEdge", withAlpha(COLOR.outline, 0.28), false)
-    this.sheetBack = new MeshSlot(root, "SheetBack", withAlpha(COLOR.outline, 0.45), false)
+    this.sheetEdge = new MeshSlot(root, "SheetEdge", COLOR.outline, false)
+    this.sheetBack = new MeshSlot(root, "SheetBack", COLOR.outline, false)
     this.borderHighlight = new MeshSlot(root, "BorderHighlight", COLOR.primary, false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
@@ -819,8 +819,11 @@ export class CanvasRenderer {
     this.connections.forEach((v) => v.setTextFlipped(flip))
   }
 
+  /** El canto de la lámina lleva el mismo color que el borde. */
   setBorderColor(c: vec4): void {
     this.surfaceBorder.setColor(c)
+    this.sheetEdge.setColor(c)
+    this.sheetBack.setColor(c)
   }
 
   /** Resalta solo el lado que se agarraría; en una esquina, sus dos lados. */
