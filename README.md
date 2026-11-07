@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/eyecanvas-icon.png" alt="EyeCanvas app icon" width="132">
+  <img src="EyeCanvas-AppIcon.png" alt="EyeCanvas app icon" width="132">
 </p>
 
 <h1 align="center">EyeCanvas</h1>
