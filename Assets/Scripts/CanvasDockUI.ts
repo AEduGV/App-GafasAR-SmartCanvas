@@ -6,7 +6,8 @@ import {FlexLayout} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex
 import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexTypes"
 import {ContentVerticalAlignment} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/LayoutTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
-import {LABEL_Z, makePill, paintPill} from "./CanvasPill"
+import {ICON} from "./CanvasIcons"
+import {LABEL_Z, makePill, paintPill, setPillHintListener} from "./CanvasPill"
 import {appendFill, roundedRect} from "./CanvasGeometry"
 import {MeshSlot} from "./CanvasRenderer"
 import {COLOR, TONE, withAlpha} from "./CanvasTheme"
@@ -35,41 +36,43 @@ interface ButtonDef {
   label: string
   action: string
   w?: number
+  icon?: Texture
 }
 
 const TOOLS: ButtonDef[] = [
-  {label: "Seleccionar", action: "tool:select", w: 10},
-  {label: "Conectar", action: "tool:connect"},
-  {label: "Dibujar", action: "tool:draw"},
-  {label: "Subrayar", action: "tool:underline"},
-  {label: "Varios", action: "multi"},
+  {label: "Seleccionar", action: "tool:select", icon: ICON.arrow_selector_tool},
+  {label: "Conectar", action: "tool:connect", icon: ICON.polyline},
+  {label: "Dibujar", action: "tool:draw", icon: ICON.draw},
+  {label: "Subrayar", action: "tool:underline", icon: ICON.format_underlined},
+  {label: "Varios", action: "multi", icon: ICON.library_add_check},
 ]
 
 const TABS: ButtonDef[] = [
-  {label: "Crear", action: "tab:crear", w: 7},
-  {label: "Flujo", action: "tab:flujo", w: 7},
-  {label: "Lógica", action: "tab:logica", w: 7},
-  {label: "Marcar", action: "tab:marcar", w: 7},
-  {label: "Stickers", action: "tab:stickers", w: 7.5},
-  {label: "Plantillas", action: "tab:plantillas", w: 8.5},
-  {label: "Canvas", action: "tab:canvas", w: 7},
+  {label: "Crear", action: "tab:crear", w: 7, icon: ICON.add_box},
+  {label: "Flujo", action: "tab:flujo", w: 7, icon: ICON.account_tree},
+  {label: "Lógica", action: "tab:logica", w: 7, icon: ICON.memory},
+  {label: "Marcar", action: "tab:marcar", w: 7, icon: ICON.brush},
+  {label: "Stickers", action: "tab:stickers", w: 7, icon: ICON.kid_star},
+  {label: "Plantillas", action: "tab:plantillas", w: 7, icon: ICON.dashboard},
+  {label: "Canvas", action: "tab:canvas", w: 7, icon: ICON.crop_free},
 ]
 
 const PANES: Record<string, ButtonDef[]> = {
   crear: [
-    {label: "Nota", action: "add:note"},
-    {label: "Texto", action: "add:text"},
-    {label: "Pantalla", action: "add:screen"},
-    {label: "Rectángulo", action: "shape:rect", w: 9.5},
-    {label: "Círculo", action: "shape:circle"},
-    {label: "Triángulo", action: "shape:triangle", w: 9},
+    {label: "Nota", action: "add:note", icon: ICON.sticky_note_2},
+    {label: "Texto", action: "add:text", icon: ICON.title},
+    {label: "Pantalla", action: "add:screen", icon: ICON.web_asset},
+    {label: "Rectángulo", action: "shape:rect", icon: ICON.rectangle},
+    {label: "Círculo", action: "shape:circle", icon: ICON.circle},
+    {label: "Triángulo", action: "shape:triangle", icon: ICON.change_history},
   ],
   flujo: [
-    {label: "Proceso", action: "shape:process"},
-    {label: "Decisión", action: "shape:decision"},
-    {label: "Inicio / fin", action: "shape:terminator", w: 9.5},
-    {label: "Datos", action: "shape:data"},
+    {label: "Proceso", action: "shape:process", icon: ICON.square},
+    {label: "Decisión", action: "shape:decision", icon: ICON.diamond},
+    {label: "Inicio / fin", action: "shape:terminator", icon: ICON.stadium},
+    {label: "Datos", action: "shape:data", icon: ICON.database},
   ],
+  // Las puertas lógicas y los nombres de color no tienen un icono que los distinga: siguen en texto.
   logica: [
     {label: "AND", action: "shape:and"},
     {label: "OR", action: "shape:or"},
@@ -77,9 +80,9 @@ const PANES: Record<string, ButtonDef[]> = {
     {label: "XOR", action: "shape:xor"},
   ],
   marcar: [
-    {label: "Fino", action: "width:0", w: 5.5},
-    {label: "Medio", action: "width:1", w: 5.5},
-    {label: "Grueso", action: "width:2", w: 6},
+    {label: "Fino", action: "width:0", w: 5.5, icon: ICON.pen_size_1},
+    {label: "Medio", action: "width:1", w: 5.5, icon: ICON.pen_size_3},
+    {label: "Grueso", action: "width:2", w: 5.5, icon: ICON.pen_size_5},
     {label: "Blanco", action: "color:0", w: 6},
     {label: "Azul", action: "color:1", w: 5},
     {label: "Verde", action: "color:2", w: 5.5},
@@ -88,39 +91,39 @@ const PANES: Record<string, ButtonDef[]> = {
     {label: "Rojo", action: "color:5", w: 5},
   ],
   stickers: [
-    {label: "Estrella", action: "sticker:star"},
-    {label: "Corazón", action: "sticker:heart"},
-    {label: "Aviso", action: "sticker:warning"},
-    {label: "Hecho", action: "sticker:done"},
+    {label: "Estrella", action: "sticker:star", icon: ICON.star},
+    {label: "Corazón", action: "sticker:heart", icon: ICON.favorite},
+    {label: "Aviso", action: "sticker:warning", icon: ICON.warning},
+    {label: "Hecho", action: "sticker:done", icon: ICON.check_circle},
   ],
   plantillas: [
-    {label: "Flujo", action: "template:flow", w: 7},
-    {label: "Card sorting", action: "template:cards", w: 10.5},
-    {label: "User journey", action: "template:journey", w: 11},
-    {label: "Arquitectura", action: "template:architecture", w: 10.5},
-    {label: "Secuencia", action: "template:sequence", w: 9},
+    {label: "Flujo", action: "template:flow", icon: ICON.account_tree},
+    {label: "Card sorting", action: "template:cards", icon: ICON.view_kanban},
+    {label: "User journey", action: "template:journey", icon: ICON.route},
+    {label: "Arquitectura", action: "template:architecture", icon: ICON.hub},
+    {label: "Secuencia", action: "template:sequence", icon: ICON.format_list_numbered},
   ],
   canvas: [
-    {label: "Horizontal / vertical", action: "flip", w: 16},
-    {label: "Colocar de nuevo", action: "replace", w: 14},
-    {label: "Vaciar", action: "clear", w: 7},
+    {label: "Horizontal / vertical", action: "flip", icon: ICON.screen_rotation},
+    {label: "Colocar de nuevo", action: "replace", icon: ICON.place_item},
+    {label: "Vaciar", action: "clear", icon: ICON.delete_sweep},
   ],
 }
 
 const SELECTION: ButtonDef[] = [
-  {label: "Editar", action: "edit"},
-  {label: "Capa −", action: "layer:-1"},
-  {label: "Capa +", action: "layer:1"},
-  {label: "Agrupar", action: "group"},
-  {label: "Separar", action: "ungroup"},
-  {label: "Borrar", action: "delete"},
+  {label: "Editar", action: "edit", icon: ICON.edit},
+  {label: "Capa −", action: "layer:-1", icon: ICON.flip_to_back},
+  {label: "Capa +", action: "layer:1", icon: ICON.flip_to_front},
+  {label: "Agrupar", action: "group", icon: ICON.join},
+  {label: "Separar", action: "ungroup", icon: ICON.ungroup},
+  {label: "Borrar", action: "delete", icon: ICON.delete},
 ]
 
 const PLACEMENT: ButtonDef[] = [
-  {label: "Horizontal", action: "orient:h", w: 10},
-  {label: "Vertical", action: "orient:v", w: 10},
-  {label: "Colocar delante", action: "quick", w: 15},
-  {label: "Cancelar", action: "cancel", w: 9},
+  {label: "Horizontal", action: "orient:h", icon: ICON.crop_landscape},
+  {label: "Vertical", action: "orient:v", icon: ICON.crop_portrait},
+  {label: "Colocar delante", action: "quick", icon: ICON.center_focus_strong},
+  {label: "Cancelar", action: "cancel", icon: ICON.close},
 ]
 
 @component
@@ -146,6 +149,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   }
 
   onAwake(): void {
+    setPillHintListener((label) => this.showHint(label))
     this.sceneObject.createComponent("Component.Canvas")
     const plate = this.sceneObject.createComponent(BackPlate.getTypeName()) as BackPlate
     plate.style = "dark"
@@ -246,7 +250,8 @@ export class CanvasDockUI extends BaseScriptComponent {
         BTN_H,
         BUTTON_SIZE,
         () => this.activeActions.has(def.action),
-        () => this._onAction.invoke(def.action)
+        () => this._onAction.invoke(def.action),
+        def.icon
       )
       this.buttons.set(def.action, btn)
     }
@@ -269,6 +274,17 @@ export class CanvasDockUI extends BaseScriptComponent {
       row.enabled = key === name
     })
     for (const tab of TABS) this.setActive(tab.action, tab.action === "tab:" + name)
+  }
+
+  /** El nombre del botón de solo icono al que se apunta; al salir vuelve el mensaje que había. */
+  private showHint(label: string | null): void {
+    if (!this.status) return
+    if (label) {
+      this.status.text = label
+      this.status.textFill.color = COLOR.text
+    } else {
+      this.setStatus(this.pendingStatus, this.pendingTone)
+    }
   }
 
   /** El color refuerza el mensaje, que siempre explica por sí mismo qué ocurre. */

@@ -3,6 +3,7 @@ import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/Cap
 import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexItem"
 import {GradientParameters} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangle"
 import {RoundedRectangleVisual} from "SpectaclesUIKit.lspkg/Scripts/Visuals/RoundedRectangle/RoundedRectangleVisual"
+import {IMAGE_MATERIAL_ASSET} from "SpectaclesUIKit.lspkg/Scripts/Utility/Assets"
 import {ButtonTone, COLOR, TONE} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
@@ -11,10 +12,12 @@ const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 export const LABEL_Z = 0.35
 
 // Grosor del borde en cm: el pulsado se refuerza con más grosor, además de con el color.
-const BORDER_DEFAULT = 0.08
+const BORDER_DEFAULT = 0.11 // más fino se rompe a tramos en la Preview
 const BORDER_ACTIVE = 0.18
 const BORDER_PRESSED = 0.26
 const HOVER_LIGHTEN = 0.08
+// Parte de la altura del botón que ocupa su icono.
+const ICON_RATIO = 0.72
 
 function solid(c: vec4): GradientParameters {
   return {
@@ -58,6 +61,27 @@ export function paintPill(btn: CapsuleButton, active: boolean, tone: ButtonTone 
   vis.triggeredBorderSize = BORDER_PRESSED
 }
 
+let hintListener: ((label: string | null) => void) | null = null
+
+/** Quien muestra el nombre de un botón de solo icono mientras se apunta a él. */
+export function setPillHintListener(fn: (label: string | null) => void): void {
+  hintListener = fn
+}
+
+function makeIcon(parent: SceneObject, icon: Texture, height: number): void {
+  const so = global.scene.createSceneObject("Icon")
+  so.setParent(parent)
+  const t = so.getTransform()
+  const size = height * ICON_RATIO
+  t.setLocalPosition(new vec3(0, 0, LABEL_Z))
+  t.setLocalScale(new vec3(size, size, 1))
+  const image = so.createComponent("Component.Image") as Image
+  image.mainMaterial = IMAGE_MATERIAL_ASSET.clone()
+  image.mainPass.baseTex = icon
+  image.mainPass.baseColor = COLOR.text
+  image.stretchMode = StretchMode.Stretch
+}
+
 export function makePill(
   parent: SceneObject,
   label: string,
@@ -65,7 +89,8 @@ export function makePill(
   height: number,
   textSize: number,
   isActive: () => boolean,
-  onPress: () => void
+  onPress: () => void,
+  icon?: Texture
 ): CapsuleButton {
   const so = global.scene.createSceneObject(label)
   so.setParent(parent)
@@ -73,6 +98,19 @@ export function makePill(
   btn.size = new vec3(width, height, 1)
   btn.onInitialized.add(() => paintPill(btn, isActive()))
   btn.onTriggerUp.add(onPress)
+
+  const item = so.createComponent(FlexItem.getTypeName()) as FlexItem
+  item.overrideWidth = width
+  item.overrideHeight = height
+
+  if (icon) {
+    makeIcon(so, icon, height)
+    btn.onInitialized.add(() => {
+      btn.onHoverEnter.add(() => hintListener?.(label))
+      btn.onHoverExit.add(() => hintListener?.(null))
+    })
+    return btn
+  }
 
   const labelSo = global.scene.createSceneObject("Label")
   labelSo.setParent(so)
@@ -87,9 +125,5 @@ export function makePill(
   t.verticalAlignment = VerticalAlignment.Center
   t.horizontalOverflow = HorizontalOverflow.Overflow
   t.layoutRect = Rect.create(-width / 2, width / 2, -height / 2, height / 2)
-
-  const item = so.createComponent(FlexItem.getTypeName()) as FlexItem
-  item.overrideWidth = width
-  item.overrideHeight = height
   return btn
 }

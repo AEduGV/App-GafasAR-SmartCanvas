@@ -4,6 +4,7 @@ import {FlexLayout} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex
 import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {CanvasShape} from "./CanvasGeometry"
+import {ICON} from "./CanvasIcons"
 import {makePill, paintPill} from "./CanvasPill"
 import {TONE} from "./CanvasTheme"
 
@@ -11,8 +12,6 @@ const BTN_W = 10
 const BTN_H = 3.6
 const GAP = 0.8
 const TEXT_SIZE = 56
-const CLOSE_TEXT_SIZE = 80
-const MENU_W = 13
 // Por delante del contenido del canvas, sobre el que se despliega en una pared.
 const MENU_Z = 1.5
 
@@ -20,23 +19,23 @@ export type EdgeTool = "move" | "draw" | "write" | "arrow"
 export type EdgeExtra = "group" | "separate"
 export type EdgeAction = EdgeTool | EdgeExtra | "delete" | "shapeMenu"
 
-const TOOLS: {action: EdgeTool; label: string}[] = [
-  {action: "move", label: "Mover"},
-  {action: "draw", label: "Dibujar"},
-  {action: "write", label: "Escribir"},
-  {action: "arrow", label: "Flecha"},
+const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
+  {action: "move", label: "Mover", icon: ICON.open_with},
+  {action: "draw", label: "Dibujar", icon: ICON.draw},
+  {action: "write", label: "Escribir", icon: ICON.edit_note},
+  {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
 ]
 
-const SHAPES: {shape: CanvasShape; label: string}[] = [
-  {shape: "rect", label: "Rectángulo"},
-  {shape: "oval", label: "Óvalo"},
-  {shape: "triangle", label: "Triángulo"},
-  {shape: "diamond", label: "Rombo"},
+const SHAPES: {shape: CanvasShape; label: string; icon: Texture}[] = [
+  {shape: "rect", label: "Rectángulo", icon: ICON.rectangle},
+  {shape: "oval", label: "Óvalo", icon: ICON.circle},
+  {shape: "triangle", label: "Triángulo", icon: ICON.change_history},
+  {shape: "diamond", label: "Rombo", icon: ICON.diamond},
 ]
 
-const EXTRAS: {action: EdgeExtra; label: string}[] = [
-  {action: "group", label: "Agrupar"},
-  {action: "separate", label: "Separar"},
+const EXTRAS: {action: EdgeExtra; label: string; icon: Texture}[] = [
+  {action: "group", label: "Agrupar", icon: ICON.join},
+  {action: "separate", label: "Separar", icon: ICON.ungroup},
 ]
 
 @component
@@ -83,7 +82,8 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
         BTN_H,
         TEXT_SIZE,
         () => this.active === def.action,
-        () => this._onAction.invoke(def.action)
+        () => this._onAction.invoke(def.action),
+        def.icon
       )
       this.buttons.set(def.action, btn)
     }
@@ -95,7 +95,8 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       BTN_H,
       TEXT_SIZE,
       () => this.menuOpen,
-      () => this._onAction.invoke("shapeMenu")
+      () => this._onAction.invoke("shapeMenu"),
+      ICON.category
     )
 
     this.menu = global.scene.createSceneObject("ShapeMenu")
@@ -105,11 +106,12 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       const item = makePill(
         this.menu,
         def.label,
-        MENU_W,
+        BTN_W,
         BTN_H,
         TEXT_SIZE,
         () => this.menuShape === def.shape,
-        () => this._onShape.invoke(def.shape)
+        () => this._onShape.invoke(def.shape),
+        def.icon
       )
       this.menuItems.set(def.shape, item)
     }
@@ -122,12 +124,13 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     closeHolder.getTransform().setLocalPosition(new vec3(rowWidth / 2 + GAP * 1.5 + BTN_H / 2, 0, 0))
     this.deleteButton = makePill(
       closeHolder,
-      "×",
+      "Borrar canvas",
       BTN_H,
       BTN_H,
-      CLOSE_TEXT_SIZE,
+      TEXT_SIZE,
       () => this.deleteArmed,
-      () => this._onAction.invoke("delete")
+      () => this._onAction.invoke("delete"),
+      ICON.close
     )
 
     // Agrupar o Separar solo aparecen cuando tienen sentido, en una fila propia sobre las herramientas
@@ -139,11 +142,12 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       makePill(
         holder,
         def.label,
-        BTN_W + 1,
+        BTN_W,
         BTN_H,
         TEXT_SIZE,
         () => false,
-        () => this._onAction.invoke(def.action)
+        () => this._onAction.invoke(def.action),
+        def.icon
       )
       holder.enabled = false
       this.extras.set(def.action, holder)

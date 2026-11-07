@@ -27,6 +27,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Superficie: mesa y pared.
 - Colores: aplicado el `design.md` revisado, en `CanvasTheme.ts`. Botones con fondo `#182230`, etiqueta `#F4F7FA` y el estado en el borde: `#C8D2DE` en reposo, `#73D8FF` y más grueso si está activo, `#FFD27A` en una confirmación, y al pulsar `#B3BFCD` o `#59BFE8` y aún más grueso. Canvas con `#182230` al 75 % y borde `#A0B1C5`. Avisos y errores llevan los prefijos «Aviso:» y «Error:».
 - Fuera de `design.md`: el amarillo de notas pasa a `#806a00` para llegar a 4,5:1, el ámbar pulsado es `#E0B662`, y avisos y errores llevan texto pero no icono. Sin uso porque sus funciones están fuera: `#8FE3B0` (guardado) y los colores de categoría.
+- (2026-11-07) Los botones del panel y de la barra llevan iconos de Material Symbols sacados de `google/material-design-icons` (ver `THIRD_PARTY_NOTICES.md`), y su nombre aparece en la línea de estado al apuntarlos. Siguen en texto las puertas lógicas y los colores, que no tienen un icono que los distinga.
 - (2026-11-07) Cambiar el tamaño queda desactivado con Mover. No avisar de la superficie simulada ni llevar registro de pruebas por ahora, aunque las guías lo pidan.
 - Categorías, imágenes, comentarios y captura quedan fuera por ahora. No mostrar «Modo individual».
 - Voz: no intentarla por ahora. El botón Escribir con el teclado la simula. Se escribe en inglés y las limitaciones del teclado se quedan así.
@@ -64,7 +65,7 @@ Imágenes, comentarios, captura y alineación con objetos físicos. Nada de esto
 | `CanvasGeometry.ts` | Contornos, rellenos, trazos y tubos con `MeshBuilder` |
 | `CanvasLinks.ts` | Flechas entre canvas: guardan quién enlaza con quién y se recalculan según las poses |
 | `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit |
-| `CanvasTemplates.ts`, `CanvasTheme.ts` | Plantillas y colores de marca |
+| `CanvasTemplates.ts`, `CanvasTheme.ts`, `CanvasIcons.ts` | Plantillas, colores e iconos |
 
 La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`. Los canvas y sus barras se crean en ejecución.
 
@@ -78,6 +79,8 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
 - **Crecer con el contenido:** un rectángulo crece por el lado necesario. Las demás formas crecen lo mínimo y se desplazan lo mínimo (`fitShapeToContent`). El triángulo apoya el contenido en la base. `shapeBase` recupera el tamaño al volver a otra forma.
 - **Barra en canvas estrechos:** si el canvas es más estrecho que la barra (64 unidades, `BAR_HALF_WIDTH` en `CanvasInstance.ts`), solo se muestra en el canvas activo, para no pisar la de los vecinos.
+- **Añadir un icono:** bajar el SVG `symbols/web/<nombre>/materialsymbolsrounded/<nombre>_wght600_48px.svg` de la revisión anotada en `THIRD_PARTY_NOTICES.md`, añadirle `fill="#ffffff"`, copiarlo a `Assets/Icons/`, convertirlo con `ConvertSvgToTexture` a 128 px, borrar el SVG y añadirlo a `CanvasIcons.ts`. Los botones de solo icono se pintan con `Component.Image` y el material `Image.mat` de UIKit.
+- **Git y PNG:** mientras `.gitattributes` no esté subido, añadir los binarios sin LFS: `git -c filter.lfs.clean=cat -c filter.lfs.required=false add <archivos>`. Con LFS, el repositorio tendría punteros sin la configuración que los interpreta.
 - **Contraste:** el alfa del panel (0,92) y del canvas (0,75) está elegido para que el texto llegue a 4,5:1 aunque detrás haya blanco. Medido con la fórmula WCAG, no en gafas. `BackPlate` solo ofrece grises fijos, por eso el panel lleva encima un fondo propio (`PlateFill`).
 - **UIKit:** `FlexLayout` descubre sus elementos solo y `addItems` antes de iniciarse falla. `BackPlate` en lugar de `Frame`, que salía sobredimensionado. Los colores sólidos de `CapsuleButton`, también los del borde, se consiguen con degradados de un solo color: `borderDefaultColor` no tiene efecto.
 
