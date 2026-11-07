@@ -41,7 +41,7 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 
 ## Qué funciona hoy
 
-- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar o la goma activos, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
+- **Colocar un canvas:** se pellizcan dos esquinas sobre una mesa o una pared, y se detecta la superficie real. Si la superficie está a más de 1,5 m, o no se detecta ninguna con la orientación Vertical, las esquinas se marcan igual pero sobre un plano vertical a 75 cm delante del usuario: el canvas queda flotando de frente, quieto en la escena, y no te sigue. Tamaño mínimo 12×8 unidades. Pulsar fuera de los canvas empieza otro sin borrar los anteriores, salvo con Dibujar o la goma activos, donde solo avisa. «Colocar delante» pone un canvas vacío sin marcar esquinas.
 - **Cambiar el tamaño:** con Seleccionar, arrastrar el borde mueve ese lado y deja fijo el opuesto; desde una esquina, dos lados. Hay una franja de 2 unidades a cada lado del borde, que se ilumina al apuntarla. Mínimo 12×8, máximo 260, y nunca deja contenido fuera. Un elemento o botón encima del borde tiene prioridad.
 - **Goma:** junto a Dibujar, en el panel y en el menú radial. Arrastrarla borra solo la parte de los trazos que toca y los parte si hace falta; los trozos son trazos normales. No afecta a notas ni figuras, pero sí a subrayados y a las líneas de vida de la plantilla de secuencia, que también son trazos. Un anillo muestra su alcance (radio de 1,5 unidades).
 - **Menú radial de cada canvas:** un botón + en la esquina superior derecha (en otras formas, en su borde en esa dirección). Al pulsarlo, gira y despliega en semicírculo Mover, Dibujar, Goma, Escribir, Flecha, Forma y papelera, más Agrupar o Separar cuando tienen sentido. Forma abre un segundo arco. Se cierra al elegir una herramienta o al pulsar fuera; con el menú cerrado, el + muestra en cian la herramienta activa.
@@ -76,7 +76,8 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 
 - **Entrada:** se usan los eventos del interactor y la intersección del rayo con el plano, no `InteractableManipulation`.
 - **Detección de superficie:** `WorldQueryModule` con `filter = false` y una consulta nueva por cada clic. Con filtro o con un resultado guardado, un clic en la mesa daba un canvas vertical.
-- **Escala por distancia:** la raíz del canvas escala según `distancia / 135`, entre 0,6 y 3, para que no se vea diminuto en una pared lejana.
+- **Escala por distancia:** la raíz del canvas escala según `distancia / 135`, entre 0,6 y 3. Un canvas flotante a 75 cm usa el mínimo, 0,6.
+- **Canvas flotante (2026-11-07):** a petición del usuario, para no crear canvas gigantes en paredes lejanas. Solo cambian posición y tamaño: el gesto de dos esquinas es el mismo. `FAR_SURFACE_DISTANCE` (150, «para probar», según el usuario) y `FLOATING_DISTANCE` (75, la longitud de un brazo). Una superficie lejana da siempre un canvas vertical, también si es un suelo. El menú pegado a la vista queda a 50 cm, por delante. «Colocar delante» y Mover no se han cambiado.
 - **Colisionador rectangular:** la superficie conserva un colisionador de caja. Las esquinas fuera de la forma se filtran en `onTriggerStart` con `contains()`.
 - **Destruir objetos:** usar `retire()`, nunca `destroy()` directo en algo con `Interactable`. El cursor de SIK guarda objetos en caché y lanza "Object is null" si ya no existen. Además, borrar un canvas se aplaza fuera del evento de su propio botón.
 - **Cambio de superficie:** exige 0,15 s apuntando entre mesa y pared, y 0,5 s entre dos paredes, para que el canto de un marco no tuerza el canvas.
@@ -111,11 +112,12 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - El borde de un canvas inactivo (`#A0B1C5` al 60 %) da 3,55:1 sobre `#182230`, pero baja a 2,11:1 si detrás hay blanco. En gafas, el contraste real está sin medir.
 - `retire()` no cubre del todo la caché del cursor de SIK: una vez saltó `Object is null` en `blendCachedInteractables`, 7 minutos después de Vaciar, sin más efecto visible. No reproducido.
 - En Preview, lo virtual solo se ve en una franja central (x entre 0,27 y 0,73 aprox.), y el menú radial de un canvas cerca del borde puede quedar fuera. El + cubre la parte interior de la esquina superior derecha: para cambiar el tamaño desde ella, hay que agarrar por fuera. Sobre una mesa, el menú se ve pequeño e inclinado, y queda en la esquina lejana porque no se adapta a quien mira desde el otro lado.
-- El rayo de SIK llega a 500 cm: un canvas colocado más lejos, como la pared del fondo de Evening Room desde la cámara por defecto, se ve pero no responde.
+- El rayo de SIK llega a 500 cm: un canvas a más distancia se ve pero no responde. Ya no se crea así, pero Mover aún puede llevarlo a una pared lejana, donde además crece.
+- Un canvas flotante queda fuera de la franja visible de la Preview con poco que se mueva la cámara de lado: a 75 cm, unos 20 cm desde el centro.
 - Abierto, el menú tapa la parte alta de la vista, y con ella el + de un canvas alto: hay que cerrarlo para llegar a este. En gafas no se ha visto: su posición está medida para la franja de la Preview.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
 - Sin probar con el ratón real (todo lo hecho el 2026-11-07 se probó con clics simulados): el menú pegado a la vista, el nombre del botón al apuntarlo, y que tras elegir una herramienta del menú radial mover el cursor fuera del canvas no empiece otro, que en la simulación sí ocurre.
-- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; Agrupar y Separar en el menú radial; cerrar el menú radial pulsando fuera; el menú principal abierto mientras se escribe, o sobre una mesa; la goma en otras capas o sobre una mesa.
+- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; Agrupar y Separar en el menú radial; cerrar el menú radial pulsando fuera; un canvas flotante apuntando a un suelo o una mesa lejanos, o sin ninguna superficie detectada; mover o llenar de contenido un canvas flotante; el menú principal abierto mientras se escribe, o sobre una mesa; la goma en otras capas o sobre una mesa.
 
 ## Cómo probar sin romper nada
 
@@ -151,6 +153,8 @@ Alba Anton también sube a `main` desde la web de GitHub: haz `git fetch` antes 
 ## Preguntas abiertas para el usuario
 
 - Si Mover, Flecha y Subrayar deben dejar de iniciar otro canvas al pulsar fuera, como ya hacen Dibujar y la goma.
+- Mover hacia una pared: el usuario anticipó el 2026-11-07 que se moverá sin cambiar de tamaño, pero «lo definiremos después». Hoy, al pegarse, sigue cambiando de escala según la distancia.
+- Si «Colocar delante» debe crear también a 75 cm: sigue a 135 cm con escala 1.
 - Si añadir Deshacer. No existe, así que lo borrado, también con la goma, no se recupera.
 - Si la goma debe respetar subrayados y líneas de vida de la plantilla de secuencia.
 - Si el botón de menú y la línea de estado deben ir en otro sitio en gafas, cuya zona visible no se ha medido.

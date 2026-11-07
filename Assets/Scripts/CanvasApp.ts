@@ -41,6 +41,9 @@ const BORDER_IDLE = withAlpha(COLOR.outline, 0.6)
 const CORNER_QUERY_TIMEOUT = 0.5
 // Distancia a la que el contenido se ve a escala 1. Más lejos, todo crece para seguir siendo legible.
 const REFERENCE_DISTANCE = 135
+// Una superficie más lejana no recibe el canvas: se crea en el aire, a la longitud de un brazo.
+const FAR_SURFACE_DISTANCE = 150
+const FLOATING_DISTANCE = 75
 const MIN_SCALE = 0.6
 const MAX_SCALE = 3
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
@@ -524,15 +527,24 @@ export class CanvasApp extends BaseScriptComponent {
   private placementPoint(origin: vec3, dir: vec3): {point: vec3 | null; fromSurface: boolean; normal: vec3} {
     const hit = this.surfaceHit
     if (hit && getTime() - hit.time < 0.5) {
-      return {point: hit.position, fromSurface: true, normal: hit.normal}
+      if (!this.isFarSurface(hit.position)) return {point: hit.position, fromSurface: true, normal: hit.normal}
+      return {...this.virtualPoint(origin, dir, "vertical"), fromSurface: false}
     }
+    return {...this.virtualPoint(origin, dir, this.orientation), fromSurface: false}
+  }
+
+  private isFarSurface(point: vec3): boolean {
+    return point.distance(this.camera.getWorldPosition()) > FAR_SURFACE_DISTANCE
+  }
+
+  private virtualPoint(origin: vec3, dir: vec3, orientation: Orientation): {point: vec3 | null; normal: vec3} {
     const camPos = this.camera.getWorldPosition()
-    const basis = this.basisFor(this.orientation)
+    const normal = this.basisFor(orientation).normal
     const anchor =
-      this.orientation === "horizontal"
+      orientation === "horizontal"
         ? camPos.add(new vec3(0, -30, 0))
-        : camPos.add(this.flatForward().uniformScale(110))
-    return {point: this.intersectPlane(origin, dir, anchor, basis.normal), fromSurface: false, normal: basis.normal}
+        : camPos.add(this.flatForward().uniformScale(FLOATING_DISTANCE))
+    return {point: this.intersectPlane(origin, dir, anchor, normal), normal}
   }
 
   /** Pregunta por el punto exacto del clic: lo detectado antes puede ser de otro sitio. */
@@ -546,20 +558,23 @@ export class CanvasApp extends BaseScriptComponent {
     this.hitSession.hitTest(origin, origin.add(dir.uniformScale(800)), (result) => {
       if (this.cornerQuery !== query || this.corner) return
       this.cornerQuery = null
-      if (result) this.lockCorner(result.position, result.normal, true)
-      else this.lockFirstCornerVirtual(origin, dir)
+      if (result && !this.isFarSurface(result.position)) {
+        this.lockCorner(result.position, result.normal, true)
+        return
+      }
+      if (result) {
+        // Lo que flota delante del usuario queda siempre de frente, aunque se apuntara a un suelo lejano.
+        this.orientation = "vertical"
+        this.syncPlacementButtons()
+        this.log("superficie lejana: canvas delante del usuario")
+      }
+      this.lockFirstCornerVirtual(origin, dir)
     })
   }
 
   private lockFirstCornerVirtual(origin: vec3, dir: vec3): void {
-    const camPos = this.camera.getWorldPosition()
-    const basis = this.basisFor(this.orientation)
-    const anchor =
-      this.orientation === "horizontal"
-        ? camPos.add(new vec3(0, -30, 0))
-        : camPos.add(this.flatForward().uniformScale(110))
-    const point = this.intersectPlane(origin, dir, anchor, basis.normal)
-    if (point) this.lockCorner(point, basis.normal, false)
+    const {point, normal} = this.virtualPoint(origin, dir, this.orientation)
+    if (point) this.lockCorner(point, normal, false)
   }
 
   private updatePlacement(): void {
