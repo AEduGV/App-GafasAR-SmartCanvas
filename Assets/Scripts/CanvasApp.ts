@@ -56,6 +56,14 @@ const CANDIDATE_DOT = 0.9
 const HORIZONTAL_MIN_Y = 0.8
 const VERTICAL_MAX_Y = 0.4
 const MAX_DRAG_DISTANCE = 600
+// Con Mover, mantener pulsado sin mover la mano recoge el canvas en una bola que se lleva en los dedos.
+const HOLD_TIME = 0.5
+const HOLD_STILL_DOT = 0.9997 // unos 1,4 grados
+const BALL_RADIUS = 3
+const BALL_TIME = 0.18
+const BALL_SURFACE_GAP = 2
+// No se llega a 0: una escala nula rompería la matriz de los objetos que siguen dentro del canvas.
+const COLLAPSED_SCALE = 0.005
 const DELETE_CONFIRM_TIME = 3
 const MAX_TEXT = 80
 const NOTICE_TIME = 2.5
@@ -125,6 +133,12 @@ interface CanvasDrag {
   members: {canvas: CanvasInstance; localPos: vec3; relRotation: quat; ratio: number}[]
   transition: {fromRotation: quat; toRotation: quat; fromScale: number; toScale: number; start: number} | null
   candidate: {normal: vec3; since: number} | null
+  startTime: number
+  startDir: vec3
+  /** Ya se movió: mantener pulsado dejó de ser un agarre. */
+  moved: boolean
+  ball: {start: number; fullScale: number; from: vec3; distance: number; origin: vec3; dir: vec3} | null
+  surface: SurfaceHit | null
 }
 
 interface Placing {
@@ -155,6 +169,7 @@ export class CanvasApp extends BaseScriptComponent {
   private nextCanvasId = 1
   private nextGroupId = 1
   private cursor: MeshSlot
+  private ball: SceneObject
   private cornerA: MeshSlot
   private eraserRing: MeshSlot
   private camera: Transform
@@ -346,6 +361,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.eraserRing.commit()
     this.eraserRing.setVisible(false)
 
+    this.ball = this.makeBall(markers)
     this.initSurfaceDetection()
     this.dock.onAction.add((a) => this.onAction(a))
     this.dock.setActive("width:" + this.widthIndex, true)
@@ -359,6 +375,34 @@ export class CanvasApp extends BaseScriptComponent {
       it.onTriggerCanceled.add(() => this.onTriggerEnd(it))
     }
     this.enterPlacement()
+  }
+
+  /** Un disco de frente con brillo y sombra, que se lee como una esfera sin depender de la luz. */
+  private makeBall(parent: SceneObject): SceneObject {
+    const root = global.scene.createSceneObject("Ball")
+    root.setParent(parent)
+    const circle = (r: number, cx: number, cy: number): vec2[] => {
+      const pts: vec2[] = []
+      for (let i = 0; i < 40; i++) {
+        const a = (i / 40) * Math.PI * 2
+        pts.push(new vec2(cx + Math.cos(a) * r, cy + Math.sin(a) * r))
+      }
+      return pts
+    }
+    const fill = new MeshSlot(root, "BallFill", COLOR.surface, false)
+    appendFill(fill.begin(), circle(BALL_RADIUS, 0, 0), 0)
+    fill.commit()
+    const shade = new MeshSlot(root, "BallShade", withAlpha(COLOR.primary, 0.3), false)
+    appendFill(shade.begin(), circle(BALL_RADIUS * 0.68, -BALL_RADIUS * 0.16, BALL_RADIUS * 0.18), 0.1)
+    shade.commit()
+    const glint = new MeshSlot(root, "BallGlint", withAlpha(COLOR.text, 0.7), false)
+    appendFill(glint.begin(), circle(BALL_RADIUS * 0.17, -BALL_RADIUS * 0.34, BALL_RADIUS * 0.4), 0.2)
+    glint.commit()
+    const rim = new MeshSlot(root, "BallRim", COLOR.primary, false)
+    appendStroke(rim.begin(), circle(BALL_RADIUS, 0, 0), true, 0.22, 0.3)
+    rim.commit()
+    root.enabled = false
+    return root
   }
 
   private makeDot(parent: SceneObject, name: string, r: number, color: vec4): MeshSlot {
@@ -834,6 +878,11 @@ export class CanvasApp extends BaseScriptComponent {
         })),
         transition: null,
         candidate: null,
+        startTime: getTime(),
+        startDir: ray.dir,
+        moved: false,
+        ball: null,
+        surface: null,
       },
     }
   }
@@ -843,7 +892,15 @@ export class CanvasApp extends BaseScriptComponent {
     const drag = press.drag
     const ray = this.activeRay(press.interactor)
     if (!ray || !drag) return
+    if (!drag.moved && !drag.ball) {
+      if (ray.dir.dot(drag.startDir) < HOLD_STILL_DOT) drag.moved = true
+      else if (getTime() - drag.startTime >= HOLD_TIME) this.gatherIntoBall(drag)
+    }
     this.queryDragSurface(ray.origin, ray.dir, press)
+    if (drag.ball) {
+      this.updateBall(drag, ray.origin, ray.dir)
+      return
+    }
     const tr = drag.transition
     if (tr) {
       const k = Math.min(1, (getTime() - tr.start) / STICK_TIME)
@@ -855,6 +912,77 @@ export class CanvasApp extends BaseScriptComponent {
     const q = this.intersectPlane(ray.origin, ray.dir, drag.planePoint, drag.planeNormal)
     // Un rayo casi paralelo a la superficie mandaría el canvas al infinito.
     if (q && q.distance(this.camera.getWorldPosition()) < MAX_DRAG_DISTANCE) drag.target = q
+    this.applyDragPose(drag)
+  }
+
+  /** A partir de aquí el canvas se sujeta por su centro, que es donde quedará al soltarlo. */
+  private gatherIntoBall(drag: CanvasDrag): void {
+    const anchor = drag.members[0].canvas
+    const b = anchor.renderer.getBounds()
+    const center = new vec3((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, 0)
+    const fullScale = drag.transition ? drag.transition.toScale : drag.scale
+    drag.grab = center
+    drag.transition = null
+    drag.candidate = null
+    const from = anchor.toWorld(center)
+    const eye = this.camera.getWorldPosition()
+    drag.ball = {start: getTime(), fullScale, from, distance: from.distance(eye), origin: eye, dir: this.camera.back}
+    this.ball.enabled = true
+    this.closeEdgeMenu()
+    this.dock.setStatus("Lleva la bola adonde quieras y suelta para colocar el canvas")
+    this.log("canvas " + anchor.id + " agarrado")
+  }
+
+  private updateBall(drag: CanvasDrag, origin: vec3, dir: vec3): void {
+    const ball = drag.ball
+    if (!ball) return
+    ball.origin = origin
+    ball.dir = dir
+    // Nunca atraviesa la superficie que tiene delante.
+    let distance = FLOATING_DISTANCE
+    const hit = drag.surface
+    if (hit && getTime() - hit.time < 0.5) {
+      distance = Math.min(distance, Math.max(BALL_SURFACE_GAP, hit.position.distance(origin) - BALL_SURFACE_GAP))
+    }
+    const point = origin.add(dir.uniformScale(distance))
+    const k = Math.min(1, (getTime() - ball.start) / BALL_TIME)
+    const e = k * k * (3 - 2 * k)
+    // Mientras lleva la bola, el canvas sigue ahí recogido: así sus flechas la siguen.
+    drag.scale = ball.fullScale + (COLLAPSED_SCALE - ball.fullScale) * e
+    drag.target = vec3.lerp(ball.from, point, e)
+    this.applyDragPose(drag)
+    const t = this.ball.getTransform()
+    t.setWorldPosition(point)
+    t.setWorldRotation(quat.lookAt(this.camera.getWorldPosition().sub(point).normalize(), this.camera.up))
+    t.setWorldScale(vec3.one().uniformScale(Math.max(0.01, e)))
+  }
+
+  /**
+   * Reaparece con su tamaño, en la dirección de la bola: en la superficie cercana a la que se apunta o, si no hay,
+   * flotando de frente a la distancia que tenía. Traerlo hasta la bola lo haría enorme.
+   */
+  private dropBall(drag: CanvasDrag): void {
+    const ball = drag.ball
+    if (!ball) return
+    this.ball.enabled = false
+    drag.ball = null
+    drag.scale = ball.fullScale
+    // Si no se ha llevado a ningún sitio, vuelve exactamente a donde estaba.
+    if (ball.dir.dot(drag.startDir) >= HOLD_STILL_DOT) {
+      drag.target = ball.from
+      this.applyDragPose(drag)
+      return
+    }
+    const hit = drag.surface
+    const fresh = hit && getTime() - hit.time < 0.5 ? hit : null
+    const near = fresh && !this.isFarSurface(fresh.position) ? fresh : null
+    const limit = fresh ? fresh.position.distance(ball.origin) - BALL_SURFACE_GAP : ball.distance
+    const point = ball.origin.add(ball.dir.uniformScale(Math.max(BALL_SURFACE_GAP, Math.min(ball.distance, limit))))
+    const frame = near ? this.surfaceFrame(near.position, near.normal) : null
+    const basis = this.basisFor("vertical")
+    drag.rotation = frame ? quat.lookAt(frame.normal, frame.up) : quat.lookAt(basis.normal, basis.up)
+    drag.target = frame && near ? near.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
+    for (const m of drag.members) m.canvas.orientation = frame ? frame.orientation : "vertical"
     this.applyDragPose(drag)
   }
 
@@ -875,7 +1003,12 @@ export class CanvasApp extends BaseScriptComponent {
     this.hitPending = true
     this.hitSession.hitTest(origin, origin.add(dir.uniformScale(800)), (result) => {
       this.hitPending = false
-      if (this.press === press && press.drag) this.onDragSurface(press.drag, result)
+      if (this.press !== press || !press.drag) return
+      if (press.drag.ball) {
+        press.drag.surface = result ? {position: result.position, normal: result.normal, time: getTime()} : null
+      } else {
+        this.onDragSurface(press.drag, result)
+      }
     })
   }
 
@@ -983,6 +1116,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private endMoveCanvas(press: Press): void {
     const drag = press.drag
+    if (drag?.ball) this.dropBall(drag)
     if (drag?.transition) {
       // Soltar a mitad de la transición deja el canvas ya en su pose final.
       drag.rotation = drag.transition.toRotation
@@ -1581,7 +1715,7 @@ export class CanvasApp extends BaseScriptComponent {
       case "underline":
         return "Pellizca un elemento para subrayarlo"
       case "moveCanvas":
-        return "Arrástralo con su contenido. Llévalo a una pared o una mesa para pegarlo"
+        return "Arrástralo con su contenido, o mantenlo pulsado para agarrarlo y llevarlo a otro sitio"
       default:
         return this.multi
           ? "Toca varios elementos y pulsa Agrupar"
