@@ -1,10 +1,8 @@
 // Botón de menú, línea de estado y panel de herramientas, pegados a la vista como una capa plana.
 // Solo expone acciones como texto y pinta el estado que le envían.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
-import {FlexItem} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexItem"
 import {FlexLayout} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexLayout"
 import {FlexAlign, FlexDirection, FlexJustify} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/Flex/FlexTypes"
-import {ContentVerticalAlignment} from "SpectaclesUIKit.lspkg/Scripts/Components/Layout2D/LayoutTypes"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {ICON} from "./CanvasIcons"
 import {LABEL_Z, makePill, paintPill, setPillHintListener, setPillIcon} from "./CanvasPill"
@@ -31,16 +29,15 @@ const SPRING = 1.5
 // Los iconos aparecen cuando el vidrio ya casi ha llegado a su tamaño.
 const CONTENT_FROM = 0.55
 
-const PANEL_W = 57
-const ROW_H = 3
-const PANEL_H = ROW_H * 4 + 1.6
-const BTN_H = 2.6
+// Barra lateral: cada sección es una columna que baja desde el botón, una junto a otra.
+const BTN_H = 3
+const ICON_W = 5.2
 const GAP = 0.5
+const COL_GAP = 0.8
+const PAD = 1
 
 const BUTTON_SIZE = 39
 const STATUS_SIZE = 41
-// Al colocar el canvas el panel solo tiene una fila.
-const COMPACT_H = ROW_H + 1.6
 
 // Lo más cerca posible sin molestar, para que ningún canvas se interponga. Las medidas de este archivo
 // son las de un panel a VIEW_REFERENCE cm, y se escalan para verse igual de grandes a esta distancia.
@@ -57,6 +54,8 @@ const STATUS_PAD = 1.2
 // Anchura aproximada por carácter: la placa se ajusta al mensaje para tapar lo menos posible.
 const STATUS_CHAR_W = 0.5
 const MENU_TOP = TOGGLE_Y - TOGGLE_SIZE / 2 - 0.8
+// Borde izquierdo de la franja visible: la barra baja pegada a él.
+const MENU_LEFT = -29.5
 
 // Tras estas acciones el menú sigue abierto: llevan a otro botón del menú o piden una segunda pulsación.
 const KEEP_OPEN = new Set(["tab", "width", "color", "layer", "orient", "multi", "delete", "clear"])
@@ -171,13 +170,15 @@ export class CanvasDockUI extends BaseScriptComponent {
   private glassSheen: MeshSlot | null = null
   private glassRim: MeshSlot | null = null
   private glassGlint: MeshSlot | null = null
-  private plateSize = new vec2(PANEL_W + 2, PANEL_H + 1.4)
+  private plateSize = new vec2(ICON_W + PAD * 2, BTN_H + PAD * 2)
+  private columns: {so: SceneObject; count: number; width: number}[] = []
   private progress = 0
   private panes = new Map<string, SceneObject>()
   private buttons = new Map<string, CapsuleButton>()
-  private workRows: SceneObject[] = []
-  private selectionRow: SceneObject | null = null
-  private placementRow: SceneObject | null = null
+  private toolsColumn: SceneObject | null = null
+  private tabsColumn: SceneObject | null = null
+  private selectionColumn: SceneObject | null = null
+  private placementColumn: SceneObject | null = null
   private ready = false
   private pendingStatus = ""
   private pendingTone: StatusTone = "normal"
@@ -266,24 +267,30 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (this.progress === 0 && this.menu) this.menu.enabled = false
   }
 
-  /** De la forma del botón a la del panel: al abrir con un rebote elástico, al cerrar con suavidad. */
+  /**
+   * De la forma del botón a la de la barra. Al abrir se ensancha enseguida y cae hacia abajo con un rebote
+   * elástico; al cerrar se recoge con suavidad. El origen del menú es la esquina superior izquierda de la barra.
+   */
   private drawGlass(): void {
     if (!this.glassFill || !this.glassSheen || !this.glassRim || !this.glassGlint) return
     const k = this.progress
     const t = k - 1
-    const e = this.opened ? 1 + (SPRING + 1) * t * t * t + SPRING * t * t : k * k * (3 - 2 * k)
+    const drop = this.opened ? 1 + (SPRING + 1) * t * t * t + SPRING * t * t : k * k * (3 - 2 * k)
+    const kw = Math.min(1, k * 1.8)
+    const widen = this.opened ? kw * (2 - kw) : drop
     const full = this.plateSize
-    // Centro del botón en las coordenadas del menú, que se centra en el panel abierto.
-    const from = new vec2(TOGGLE_X, TOGGLE_Y - (MENU_TOP - full.y / 2))
-    const w = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.x - TOGGLE_SIZE) * e)
-    const h = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.y - TOGGLE_SIZE) * e)
-    const c = new vec2(from.x * (1 - e), from.y * (1 - e))
-    const r = Math.min(w, h) / 2 + (PLATE_RADIUS - Math.min(w, h) / 2) * Math.min(1, Math.max(0, e))
+    const w = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.x - TOGGLE_SIZE) * widen)
+    const h = Math.max(TOGGLE_SIZE * 0.6, TOGGLE_SIZE + (full.y - TOGGLE_SIZE) * drop)
+    // La esquina superior izquierda va de la del botón a la de la barra: crece hacia la derecha y hacia abajo.
+    const fromX = TOGGLE_X - TOGGLE_SIZE / 2 - MENU_LEFT
+    const fromY = TOGGLE_Y + TOGGLE_SIZE / 2 - MENU_TOP
+    const c = new vec2(fromX * (1 - widen) + w / 2, fromY * (1 - drop) - h / 2)
+    const r = Math.min(w, h) / 2 + (PLATE_RADIUS - Math.min(w, h) / 2) * Math.min(1, Math.max(0, drop))
     const pts = roundedRect(w, h, Math.max(0.1, r)).map((p) => p.add(c))
 
     appendFill(this.glassFill.begin(), pts, 0.2)
     this.glassFill.commit()
-    const band = roundedRect(w - 0.8, h * 0.42, Math.max(0.1, r - 0.4)).map((p) => new vec2(p.x + c.x, p.y + c.y + h * 0.27))
+    const band = roundedRect(Math.max(0.2, w - 0.8), h * 0.42, Math.max(0.1, r - 0.4)).map((p) => new vec2(p.x + c.x, p.y + c.y + h * 0.27))
     appendFill(this.glassSheen.begin(), band, 0.22)
     this.glassSheen.commit()
     appendStroke(this.glassRim.begin(), pts, true, 0.12, 0.24)
@@ -310,45 +317,34 @@ export class CanvasDockUI extends BaseScriptComponent {
     content.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
     this.content = content
 
-    const column = content.createComponent(FlexLayout.getTypeName()) as FlexLayout
-    column.width = PANEL_W
-    column.height = PANEL_H
-    column.direction = FlexDirection.Column
-    column.justifyContent = FlexJustify.Start
-    column.alignItems = FlexAlign.Center
-    column.rowGap = 0.3
-    column.verticalAlignment = ContentVerticalAlignment.Center
-
-    const items: FlexItem[] = []
-    const addSlot = (name: string, h: number): SceneObject => {
-      const so = global.scene.createSceneObject(name)
-      so.setParent(content)
-      const item = so.createComponent(FlexItem.getTypeName()) as FlexItem
-      item.overrideWidth = PANEL_W
-      item.overrideHeight = h
-      items.push(item)
-      return so
-    }
-
-    const toolsSlot = addSlot("Tools", ROW_H)
-    const tabsSlot = addSlot("Tabs", ROW_H)
-    const paneSlot = addSlot("Pane", ROW_H)
-    const selSlot = addSlot("Selection", ROW_H)
-
-    this.workRows.push(this.makeRow(toolsSlot, TOOLS), this.makeRow(tabsSlot, TABS))
+    const paneWidth = Math.max(...Object.keys(PANES).map((name) => this.columnWidth(PANES[name])))
+    this.toolsColumn = this.makeColumn(content, TOOLS)
+    this.tabsColumn = this.makeColumn(content, TABS)
     for (const name of Object.keys(PANES)) {
-      const row = this.makeRow(paneSlot, PANES[name])
-      this.panes.set(name, row)
-      row.enabled = name === "crear"
+      const col = this.makeColumn(content, PANES[name], paneWidth)
+      this.panes.set(name, col)
+      col.enabled = name === "crear"
     }
-    this.selectionRow = this.makeRow(selSlot, SELECTION)
-    this.placementRow = this.makeRow(toolsSlot, PLACEMENT)
+    this.selectionColumn = this.makeColumn(content, SELECTION)
+    this.placementColumn = this.makeColumn(content, PLACEMENT)
 
     this.ready = true
     this.setActive("tab:crear", true)
     this.setPhase(this.pendingPhase)
     this.activeActions.forEach((a) => this.paint(a))
     this.setOpen(false)
+  }
+
+  private buttonWidth(def: ButtonDef): number {
+    return def.icon ? ICON_W : def.w ?? ICON_W
+  }
+
+  private columnWidth(defs: ButtonDef[]): number {
+    return Math.max(...defs.map((d) => this.buttonWidth(d)))
+  }
+
+  private columnHeight(count: number): number {
+    return count * BTN_H + (count - 1) * GAP
   }
 
   private makeStatus(): void {
@@ -385,21 +381,21 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.statusPlate.commit()
   }
 
-  private makeRow(parent: SceneObject, defs: ButtonDef[]): SceneObject {
-    const row = global.scene.createSceneObject("Row")
-    row.setParent(parent)
-    const flex = row.createComponent(FlexLayout.getTypeName()) as FlexLayout
-    flex.width = PANEL_W
-    flex.height = ROW_H
-    flex.direction = FlexDirection.Row
-    flex.justifyContent = FlexJustify.Center
+  private makeColumn(parent: SceneObject, defs: ButtonDef[], width: number = this.columnWidth(defs)): SceneObject {
+    const col = global.scene.createSceneObject("Column")
+    col.setParent(parent)
+    const flex = col.createComponent(FlexLayout.getTypeName()) as FlexLayout
+    flex.width = width
+    flex.height = this.columnHeight(defs.length)
+    flex.direction = FlexDirection.Column
+    flex.justifyContent = FlexJustify.Start
     flex.alignItems = FlexAlign.Center
-    flex.columnGap = GAP
+    flex.rowGap = GAP
     for (const def of defs) {
       const btn = makePill(
-        row,
+        col,
         def.label,
-        def.w ?? 8,
+        this.buttonWidth(def),
         BTN_H,
         BUTTON_SIZE,
         () => this.activeActions.has(def.action),
@@ -411,7 +407,34 @@ export class CanvasDockUI extends BaseScriptComponent {
       )
       this.buttons.set(def.action, btn)
     }
-    return row
+    this.columns.push({so: col, count: defs.length, width})
+    return col
+  }
+
+  /** Coloca de izquierda a derecha las columnas visibles, colgando del borde superior, y ajusta el vidrio. */
+  private layoutColumns(): void {
+    const order = this.pendingPhase === "work"
+      ? [this.toolsColumn, this.tabsColumn, this.visiblePane(), this.selectionColumn]
+      : [this.placementColumn]
+    let x = PAD
+    let tallest = 0
+    for (const so of order) {
+      const info = this.columns.find((c) => c.so === so)
+      if (!info) continue
+      const h = this.columnHeight(info.count)
+      info.so.getTransform().setLocalPosition(new vec3(x + info.width / 2, -PAD - h / 2, 0))
+      x += info.width + COL_GAP
+      tallest = Math.max(tallest, h)
+    }
+    this.setPlateSize(new vec2(x - COL_GAP + PAD, tallest + PAD * 2))
+  }
+
+  private visiblePane(): SceneObject | null {
+    let found: SceneObject | null = null
+    this.panes.forEach((col, key) => {
+      if (this.activeActions.has("tab:" + key)) found = col
+    })
+    return found
   }
 
   private paint(action: string): void {
@@ -426,10 +449,11 @@ export class CanvasDockUI extends BaseScriptComponent {
   }
 
   showTab(name: string): void {
-    this.panes.forEach((row, key) => {
-      row.enabled = key === name
+    this.panes.forEach((col, key) => {
+      col.enabled = key === name
     })
     for (const tab of TABS) this.setActive(tab.action, tab.action === "tab:" + name)
+    if (this.ready) this.layoutColumns()
   }
 
   /** El nombre del botón de solo icono al que se apunta; al salir vuelve el mensaje que había. */
@@ -452,20 +476,16 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.pendingPhase = phase
     if (!this.ready) return
     const working = phase === "work"
-    const plateH = working ? PANEL_H + 1.4 : COMPACT_H
-    this.setPlateSize(new vec2(PANEL_W + 2, plateH))
-    this.menu?.getTransform().setLocalPosition(new vec3(0, MENU_TOP - plateH / 2, 0))
+    this.menu?.getTransform().setLocalPosition(new vec3(MENU_LEFT, MENU_TOP, 0))
     this.setOpen(false)
-    // La columna empieza arriba: en modo compacto se baja para centrar su única fila en la placa.
-    // Abierto entero, las filas quedan algo altas en el vidrio: se bajan un poco para centrarlas.
-    const shift = working ? 0.4 : (PANEL_H - ROW_H) / 2
-    this.content?.getTransform().setLocalPosition(new vec3(0, -shift, 0.6))
-    for (const row of this.workRows) row.enabled = working
-    this.panes.forEach((row) => {
-      row.enabled = working && this.activeActions.has("tab:" + this.paneName(row))
+    if (this.toolsColumn) this.toolsColumn.enabled = working
+    if (this.tabsColumn) this.tabsColumn.enabled = working
+    this.panes.forEach((col) => {
+      col.enabled = working && this.activeActions.has("tab:" + this.paneName(col))
     })
-    if (this.selectionRow) this.selectionRow.enabled = working
-    if (this.placementRow) this.placementRow.enabled = !working
+    if (this.selectionColumn) this.selectionColumn.enabled = working
+    if (this.placementColumn) this.placementColumn.enabled = !working
+    this.layoutColumns()
   }
 
   private paneName(target: SceneObject): string {
@@ -489,7 +509,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (Math.abs(x - TOGGLE_X) < TOGGLE_SIZE / 2 && Math.abs(y - TOGGLE_Y) < TOGGLE_SIZE / 2) return true
     if (this.pendingStatus && x > STATUS_LEFT && x < STATUS_LEFT + STATUS_MAX_W && Math.abs(y - TOGGLE_Y) < STATUS_H / 2) return true
     if (!this.opened) return false
-    const h = this.pendingPhase === "work" ? PANEL_H + 1.4 : COMPACT_H
-    return Math.abs(x) < PANEL_W / 2 + 1 && y < MENU_TOP && y > MENU_TOP - h
+    const size = this.plateSize
+    return x > MENU_LEFT && x < MENU_LEFT + size.x && y < MENU_TOP && y > MENU_TOP - size.y
   }
 }
