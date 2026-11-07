@@ -205,6 +205,38 @@ export function appendFill(b: MeshBuilder, pts: vec2[], z: number): void {
 }
 
 /** Cinta plana de grosor constante sobre el plano z. */
+/** Los tramos seguidos de un contorno cerrado y centrado cuya normal exterior mira hacia esa dirección. */
+export function outlineFacing(pts: vec2[], dir: vec2, minDot: number): vec2[][] {
+  const n = pts.length
+  const faces = (i: number): boolean => {
+    const a = pts[i]
+    const b = pts[(i + 1) % n]
+    const edge = b.sub(a)
+    if (edge.length < 1e-5) return false
+    let normal = new vec2(edge.y, -edge.x).normalize()
+    if (normal.dot(a.add(b)) < 0) normal = normal.uniformScale(-1)
+    return normal.dot(dir) >= minDot
+  }
+  let start = 0
+  while (start < n && faces(start)) start++
+  // Todo el contorno mira hacia allí: no debería ocurrir en una figura cerrada.
+  if (start === n) return [pts.slice()]
+  const runs: vec2[][] = []
+  let run: vec2[] | null = null
+  for (let k = 1; k <= n; k++) {
+    const i = (start + k) % n
+    if (faces(i)) {
+      if (!run) run = [pts[i]]
+      run.push(pts[(i + 1) % n])
+    } else if (run) {
+      runs.push(run)
+      run = null
+    }
+  }
+  if (run) runs.push(run)
+  return runs
+}
+
 export function appendStroke(b: MeshBuilder, pts: vec2[], closed: boolean, width: number, z: number): void {
   const n = pts.length
   if (n < 2) return

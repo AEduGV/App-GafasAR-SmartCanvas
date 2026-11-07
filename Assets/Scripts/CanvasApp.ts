@@ -226,7 +226,6 @@ export class CanvasApp extends BaseScriptComponent {
   private flipCanvas: CanvasInstance | null = null
 
   private menuCanvas: CanvasInstance | null = null
-  private hoverBorder: CanvasInstance | null = null
 
   // Borrado
   private deleteArmed: {canvas: CanvasInstance; until: number} | null = null
@@ -1517,7 +1516,7 @@ export class CanvasApp extends BaseScriptComponent {
       interactor, mode: "resizeCanvas", id: null, planeZ: 0, start: p, last: p, dragged: false,
       resize: {grab: hit.grab, from: this.renderer.getBounds()},
     }
-    this.refreshBorders(hit.canvas)
+    hit.canvas.renderer.setBorderHighlight(hit.grab)
     return true
   }
 
@@ -1541,8 +1540,7 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private endResizeCanvas(press: Press): void {
-    this.hoverBorder = null
-    this.refreshBorders()
+    this.renderer.setBorderHighlight(null)
     if (!press.dragged) {
       this.clearSelection()
       return
@@ -1677,7 +1675,7 @@ export class CanvasApp extends BaseScriptComponent {
   private updateHover(): void {
     let hoverCanvas: CanvasInstance | null = null
     let hoverId: string | null = null
-    let border: CanvasInstance | null = null
+    let border: {canvas: CanvasInstance; grab: BorderGrab} | null = null
     if (this.tool !== "draw" && this.tool !== "erase") {
       const it = SIK.InteractionManager.getTargetingInteractors()[0]
       const current = it ? it.currentInteractable : null
@@ -1688,14 +1686,13 @@ export class CanvasApp extends BaseScriptComponent {
       }
       const free = !current || (resolved && "canvas" in resolved && resolved.hit.type === "surface")
       if (this.tool === "select" && it && free && it.startPoint && it.direction && !this.rayHitsDock(it.startPoint, it.direction)) {
-        border = this.borderUnderRay(it.startPoint, it.direction)?.canvas ?? null
+        border = this.borderUnderRay(it.startPoint, it.direction)
       }
     }
-    for (const c of this.canvases) c.renderer.setHover(c === hoverCanvas ? hoverId : null)
-    // El borde se ilumina al apuntarlo: es la pista de que se puede arrastrar.
-    if (border !== this.hoverBorder) {
-      this.hoverBorder = border
-      this.refreshBorders(border)
+    for (const c of this.canvases) {
+      c.renderer.setHover(c === hoverCanvas ? hoverId : null)
+      // El lado se ilumina al apuntarlo: es la pista de que se puede arrastrar.
+      c.renderer.setBorderHighlight(border?.canvas === c ? border.grab : null)
     }
   }
 

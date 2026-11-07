@@ -12,6 +12,7 @@ import {
   createBuilder,
   insideConvex,
   outlineDistance,
+  outlineFacing,
   outlineIntersection,
   roundedRect,
   shapeOutline,
@@ -38,6 +39,10 @@ export interface Bounds {
 }
 
 /** Qué lados mueve agarrar el borde en un punto: -1 mínimo, 1 máximo, 0 ninguno. */
+// El tramo resaltado es el que mira hacia el lado agarrado, hasta unos 60 grados de esa dirección.
+const BORDER_HIGHLIGHT_DOT = 0.5
+const BORDER_HIGHLIGHT_WIDTH = 0.3
+
 export interface BorderGrab {
   x: number
   y: number
@@ -425,6 +430,8 @@ export class CanvasRenderer {
   private content: SceneObject
   private surface: MeshSlot
   private surfaceBorder: MeshSlot
+  private borderHighlight: MeshSlot
+  private highlightGrab: BorderGrab | null = null
   private surfaceHit: {interactable: Interactable; shape: BoxShape; collider: ColliderComponent}
   private layerPlanes: MeshSlot[] = []
   private layerLabels: Text[] = []
@@ -443,6 +450,7 @@ export class CanvasRenderer {
     this.root = root
     this.surface = new MeshSlot(root, "Surface", withAlpha(COLOR.surface, SURFACE_ALPHA), false)
     this.surfaceBorder = new MeshSlot(root, "SurfaceBorder", COLOR.outline, false)
+    this.borderHighlight = new MeshSlot(root, "BorderHighlight", COLOR.primary, false)
     this.surfaceHit = makeHitBox(this.surface.sceneObject)
     this.targets.set(this.surfaceHit.interactable, {type: "surface"})
     for (let i = 1; i < LAYER_COUNT; i++) {
@@ -595,6 +603,8 @@ export class CanvasRenderer {
     this.surfaceHit.collider.shape = this.surfaceHit.shape
     this.surface.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
     this.surfaceBorder.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
+    this.borderHighlight.sceneObject.getTransform().setLocalPosition(new vec3(cx, cy, 0))
+    this.drawBorderHighlight()
     this.refreshLayerPlanes()
   }
 
@@ -797,5 +807,24 @@ export class CanvasRenderer {
 
   setBorderColor(c: vec4): void {
     this.surfaceBorder.setColor(c)
+  }
+
+  /** Resalta solo el lado que se agarraría; en una esquina, sus dos lados. */
+  setBorderHighlight(grab: BorderGrab | null): void {
+    const before = this.highlightGrab
+    if (before === grab || (before && grab && before.x === grab.x && before.y === grab.y)) return
+    this.highlightGrab = grab
+    this.drawBorderHighlight()
+  }
+
+  private drawBorderHighlight(): void {
+    const builder = this.borderHighlight.begin()
+    const grab = this.highlightGrab
+    if (grab) {
+      for (const run of outlineFacing(this.outline, new vec2(grab.x, grab.y).normalize(), BORDER_HIGHLIGHT_DOT)) {
+        appendStroke(builder, run, false, BORDER_HIGHLIGHT_WIDTH, -0.02)
+      }
+    }
+    this.borderHighlight.commit()
   }
 }
