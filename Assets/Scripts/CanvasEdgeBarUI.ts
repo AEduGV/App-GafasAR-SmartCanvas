@@ -10,14 +10,15 @@ import {TONE} from "./CanvasTheme"
 const HUB_SIZE = 4.6
 const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
-// Radio de cada anillo, con las herramientas tocándose lo justo.
-export const RING_RADIUS = 10
-const SHAPE_RING_RADIUS = 14.8
-const SHAPE_STEP = 18
-// Arco en grados, desde arriba y hacia la izquierda: hacia dentro del canvas, porque en la esquina
-// derecha un círculo completo se saldría de la franja visible de la Preview.
-const ARC_START = 90
-const ARC_END = 270
+// Un cuarto de círculo hacia dentro del canvas, de la izquierda (180°) hacia abajo (270°), para que el
+// menú quede entero sobre él. En dos anillos, para que los botones no se peguen, con los del exterior
+// en los huecos que dejan los del interior.
+const INNER_RADIUS = 7.5
+export const RING_RADIUS = 13
+export const SHAPE_RING_RADIUS = 19
+const INNER_ANGLES = [180, 225, 270]
+const OUTER_ANGLES = [198, 225, 252]
+const SHAPE_STEP = 15
 const OPEN_TIME = 0.16
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
@@ -53,8 +54,8 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   private deleteButton: CapsuleButton | null = null
   private buttons = new Map<EdgeTool, CapsuleButton>()
   private shapeItems = new Map<CanvasShape, CapsuleButton>()
-  // Lo que hay en el arco ahora mismo, en orden, con el ángulo que le toca.
-  private slots: {so: SceneObject; angle: number}[] = []
+  // Cada botón del menú con el ángulo y el radio que le tocan.
+  private slots: {so: SceneObject; angle: number; radius: number}[] = []
   private active: EdgeTool | null = null
   private deleteArmed = false
   private shapeOpen = false
@@ -108,13 +109,14 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return makePill(parent, label, ITEM_SIZE, ITEM_SIZE, TEXT_SIZE, isActive, onPress, icon)
   }
 
-  /** Reparte las herramientas en el arco. */
+  /** Dibujar, Goma y Escribir en el anillo interior; Flecha, Forma y la papelera en el exterior. */
   private layout(): void {
-    const list: CapsuleButton[] = TOOLS.map((def) => this.buttons.get(def.action))
-    list.push(this.shapeButton)
-    list.push(this.deleteButton)
-    const step = (ARC_END - ARC_START) / (list.length - 1)
-    this.slots = list.map((btn, i) => ({so: btn.sceneObject, angle: ARC_START + step * i}))
+    const inner: CapsuleButton[] = [this.buttons.get("draw"), this.buttons.get("erase"), this.buttons.get("write")]
+    const outer: CapsuleButton[] = [this.buttons.get("arrow"), this.shapeButton, this.deleteButton]
+    this.slots = [
+      ...inner.map((btn, i) => ({so: btn.sceneObject, angle: INNER_ANGLES[i], radius: INNER_RADIUS})),
+      ...outer.map((btn, i) => ({so: btn.sceneObject, angle: OUTER_ANGLES[i], radius: RING_RADIUS})),
+    ]
     const shapeSlot = this.slots.find((s) => s.so === this.shapeButton.sceneObject)
     let i = 0
     for (const def of SHAPES) {
@@ -130,7 +132,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     const scale = Math.max(e, 0.01)
     for (const slot of this.slots) {
       const t = slot.so.getTransform()
-      t.setLocalPosition(polar(slot.angle, RING_RADIUS * e))
+      t.setLocalPosition(polar(slot.angle, slot.radius * e))
       t.setLocalScale(new vec3(scale, scale, scale))
     }
     if (this.hub) setPillIconRotation(this.hub, this.showsPlus() ? (e * Math.PI) / 4 : 0)

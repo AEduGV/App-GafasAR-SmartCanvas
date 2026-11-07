@@ -1,6 +1,6 @@
 // Un canvas: su contenido, su pose en el mundo y sus botones. Lo demás es común a todos.
 import {CanvasDocument} from "./CanvasDocument"
-import {CanvasEdgeBarUI, RING_RADIUS} from "./CanvasEdgeBarUI"
+import {CanvasEdgeBarUI, RING_RADIUS, SHAPE_RING_RADIUS} from "./CanvasEdgeBarUI"
 import {outlineIntersection} from "./CanvasGeometry"
 import {Bounds, CanvasRenderer, retire} from "./CanvasRenderer"
 
@@ -76,7 +76,8 @@ export class CanvasInstance {
   /** La zona del botón + o, abierto, de su anillo, incluidos los huecos entre botones. */
   onEdgeBar(p: vec2): boolean {
     if (!this.bar) return false
-    return p.distance(this.hubPoint) <= (this.bar.isOpen ? RING_RADIUS + HUB_REACH : HUB_REACH)
+    const reach = !this.bar.isOpen ? 0 : this.bar.isShapeOpen ? SHAPE_RING_RADIUS : RING_RADIUS
+    return p.distance(this.hubPoint) <= reach + HUB_REACH
   }
 
   /** Solo se tiene en cuenta si ya está colocado y visible. */
