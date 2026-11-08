@@ -23,7 +23,7 @@ export interface CanvasElement {
   points: vec2[]           // trazos: puntos relativos a (x, y)
   strokeWidth: number
   textScale: number        // tamaño de letra respecto al normal (1); la escritura convertida puede llegar a 3
-  tint: number[] | null    // color libre de un trazo (RGB de 0 a 1), elegido en la rueda; si no, el de la paleta
+  tint: number[] | null    // color libre (RGB de 0 a 1) elegido en la rueda; si no, el de la paleta
 }
 
 export interface CanvasConnection {

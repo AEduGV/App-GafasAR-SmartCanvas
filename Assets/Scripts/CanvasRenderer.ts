@@ -25,6 +25,14 @@ const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
 // Algo mayores que al principio, para leerse mejor en AR. Si no caben, el texto se encoge solo.
 const BODY_SIZE = 78
+// Brillo del relleno de una figura con color libre respecto a ese color.
+const TINT_FILL = 0.5
+
+/** El color libre de un elemento, si tiene. */
+export function tintOf(el: CanvasElement): vec4 | null {
+  const t = el.tint
+  return t && t.length >= 3 ? new vec4(t[0], t[1], t[2], 1) : null
+}
 const TITLE_SIZE = 88
 // Casi transparente: el canvas se lee por sus bordes. El texto suelto pierde contraste sobre fondos claros.
 const SURFACE_ALPHA = 0.25
@@ -183,8 +191,7 @@ class ElementView {
     const ob = this.outline.begin()
 
     if (el.kind === "stroke") {
-      const t = el.tint
-      this.fill.setColor(t && t.length >= 3 ? new vec4(t[0], t[1], t[2], 1) : palette.stroke)
+      this.fill.setColor(tintOf(el) ?? palette.stroke)
       appendStroke(fb, el.points, false, el.strokeWidth, 0)
       appendStroke(ob, el.points, false, el.strokeWidth + 0.35, -0.02)
       this.text.enabled = false
@@ -211,6 +218,9 @@ class ElementView {
 
   private fillColor(el: CanvasElement): vec4 {
     if (el.kind === "screen") return withAlpha(COLOR.surface, SCREEN_ALPHA)
+    // Como en la paleta, el relleno es una versión oscura del color, para que el texto claro se lea.
+    const tint = tintOf(el)
+    if (tint) return new vec4(tint.x * TINT_FILL, tint.y * TINT_FILL, tint.z * TINT_FILL, 1)
     return (PALETTE[el.color] ?? PALETTE[0]).fill
   }
 
@@ -267,6 +277,9 @@ class ElementView {
     this.text.verticalAlignment = isScreen ? VerticalAlignment.Top : VerticalAlignment.Center
     this.text.layoutRect = Rect.create(-el.w / 2 + insetX, el.w / 2 - insetX, -el.h / 2 + insetY, el.h / 2 - insetY)
     this.text.text = el.text
+    // Un texto suelto toma el color elegido; dentro de una figura o nota sigue claro, sobre su relleno oscuro.
+    const tint = el.kind === "text" ? tintOf(el) : null
+    this.text.textFill.color = tint ?? COLOR.text
   }
 
   setCaret(el: CanvasElement, editing: boolean): void {

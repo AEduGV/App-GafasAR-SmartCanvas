@@ -149,6 +149,8 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   // Cada botón del menú con el ángulo y el radio que le tocan.
   private slots: {so: SceneObject; angle: number; radius: number}[] = []
   private active: EdgeTool | null = null
+  // Hay un texto o una figura seleccionados en este canvas: la rueda les cambia el color.
+  private colorTarget = false
   private deleteArmed = false
   private openSub: EdgeSubmenu | null = null
   // Ángulo de cada arco exterior (el de su botón) y cuánto está abierto, de 0 a 1.
@@ -280,8 +282,14 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     if (this.hub) this.hub.getSceneObject().enabled = !open
   }
 
+  setColorTarget(on: boolean): void {
+    if (on === this.colorTarget) return
+    this.colorTarget = on
+    this.refreshPalette()
+  }
+
   private refreshPalette(): void {
-    const visible = this.active === "draw" && !this.opened
+    const visible = (this.active === "draw" || this.colorTarget) && !this.opened
     if (!visible) this.setWheel(false)
     if (this.paletteRoot) this.paletteRoot.enabled = visible
   }

@@ -11,7 +11,7 @@ import {ICON} from "./CanvasIcons"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
-import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire} from "./CanvasRenderer"
+import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire, tintOf} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
@@ -804,18 +804,21 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     this.dock.closeMenu()
+    // La rueda no termina lo que se está escribiendo: así también colorea el texto en edición.
+    if (action === "palette") {
+      const open = !canvas.bar?.isWheelOpen
+      this.closeEdgeMenu()
+      canvas.bar?.setWheel(open)
+      const forSelection = canvas === this.active && this.colorTargets().length > 0
+      this.dock.setStatus(open ? (forSelection ? "Elige un color para lo seleccionado" : "Elige un color para dibujar") : this.toolHint())
+      this.log("borde " + canvas.id + " palette")
+      return
+    }
     const wasWritingHere = this.editing !== null && canvas === this.active
     const wasOpen = this.menuCanvas === canvas
     if (this.editing) this.finishEditing()
     this.activate(canvas)
     this.log("borde " + canvas.id + " " + action)
-    if (action === "palette") {
-      const open = !canvas.bar?.isWheelOpen
-      this.closeEdgeMenu()
-      canvas.bar?.setWheel(open)
-      this.dock.setStatus(open ? "Elige un color para dibujar" : this.toolHint())
-      return
-    }
     if (action === "menu") {
       this.closeEdgeMenu()
       if (!wasOpen) {
@@ -1374,6 +1377,15 @@ export class CanvasApp extends BaseScriptComponent {
     })
   }
 
+  /** El círculo de color o su rueda abierta: pulsarlos nunca cuenta como pulsar el canvas que tienen debajo. */
+  private rayHitsPalette(origin: vec3, dir: vec3): boolean {
+    return this.canvases.some((c) => {
+      if (!c.bar || !c.placed) return false
+      const p = c.rayPoint(origin, dir, 1.4)
+      return !!p && c.bar.paletteContains(p.sub(c.hubPoint))
+    })
+  }
+
   /** Pulsar este botón nunca debe contar como pulsar fuera, aunque SIK aún no lo tenga apuntado. */
   private rayHitsLinkButton(origin: vec3, dir: vec3): boolean {
     let hit = false
@@ -1575,7 +1587,7 @@ export class CanvasApp extends BaseScriptComponent {
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
     const pressRay = this.activeRay(interactor)
-    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir) || this.handwriting.hitsRay(pressRay.origin, pressRay.dir))) return
+    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir) || this.handwriting.hitsRay(pressRay.origin, pressRay.dir) || this.rayHitsPalette(pressRay.origin, pressRay.dir))) return
     if (this.dock.closeMenu()) return
 
     const wasEditing = this.editing !== null
@@ -1896,6 +1908,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private publishSelection(): void {
     this.renderer.setSelection(this.selection, this.selectedConn)
+    this.refreshColorTargets()
     if (this.phase !== "work" || this.editing || getTime() < this.noticeUntil) return
     if (this.selection.size > 1) {
       this.dock.setStatus(this.selection.size + " elementos seleccionados")
@@ -2072,6 +2085,9 @@ export class CanvasApp extends BaseScriptComponent {
     this.closeEdgeMenu()
     if (this.editing) this.finishEditing()
     this.activate(canvas)
+    // El texto conserva el color de lo escrito: el libre de la rueda o, si no es el blanco por defecto, el de la paleta.
+    const first = ids.map((id) => this.doc.elements.get(id)).find((el): el is CanvasElement => !!el)
+    const inkColor = first ? (tintOf(first) ?? (first.color > 0 ? PALETTE[first.color]?.stroke ?? null : null)) : null
     for (const id of ids) {
       this.selection.delete(id)
       this.doc.remove(id)
@@ -2090,6 +2106,7 @@ export class CanvasApp extends BaseScriptComponent {
     const el = this.doc.add({
       kind: "text", shape: "rect", x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, w, h,
       layer: this.activeLayer, text: value, color: 0, textScale: scale,
+      tint: inkColor ? [inkColor.x, inkColor.y, inkColor.z] : null,
     })
     this.growAround(el.id)
     this.dock.setStatus("Escritura convertida en texto. Deshacer recupera los trazos")
@@ -2519,11 +2536,44 @@ export class CanvasApp extends BaseScriptComponent {
     return this.drawTint ?? PALETTE[this.color >= 0 ? this.color : 0].stroke
   }
 
+  /** Elementos seleccionados a los que la rueda puede cambiar el color: textos, figuras, notas y trazos. */
+  private colorTargets(): CanvasElement[] {
+    const out: CanvasElement[] = []
+    this.selection.forEach((id) => {
+      const el = this.doc.elements.get(id)
+      if (el && el.kind !== "screen") out.push(el)
+    })
+    return out
+  }
+
+  private elementColor(el: CanvasElement): vec4 {
+    const palette = PALETTE[el.color] ?? PALETTE[0]
+    return tintOf(el) ?? (el.kind === "stroke" || el.kind === "text" ? palette.stroke : palette.fill)
+  }
+
+  /** Con un texto o una figura seleccionados, el círculo de color aparece en su canvas y muestra su color. */
+  private refreshColorTargets(): void {
+    const targets = this.colorTargets()
+    for (const c of this.canvases) {
+      const on = c === this.active && targets.length > 0
+      c.bar?.setColorTarget(on)
+      c.bar?.setDrawColor(on ? this.elementColor(targets[0]) : this.currentDrawColor())
+    }
+  }
+
   private setDrawTint(color: vec4): void {
+    const rgb = [color.x, color.y, color.z]
+    const targets = this.colorTargets()
+    if (targets.length > 0) {
+      for (const el of targets) this.doc.update(el.id, {tint: rgb})
+      this.dock.setStatus(targets.length === 1 ? "Color cambiado" : "Color cambiado en " + targets.length + " elementos")
+      this.log("color de " + targets.map((el) => el.id).join(", "))
+      return
+    }
     this.drawTint = color
     for (const c of this.canvases) c.bar?.setDrawColor(color)
     this.dock.setStatus("Color elegido: dibuja sobre el canvas")
-    this.log("color de dibujo " + [color.x, color.y, color.z].map((v) => v.toFixed(2)).join(","))
+    this.log("color de dibujo " + rgb.map((v) => v.toFixed(2)).join(","))
   }
 
   private setColor(index: number): void {
@@ -2531,7 +2581,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.drawTint = null
     for (const c of this.canvases) c.bar?.setDrawColor(this.currentDrawColor())
     for (let i = 0; i < PALETTE.length; i++) this.dock.setActive("color:" + i, i === index)
-    this.selection.forEach((id) => this.doc.update(id, {color: index}))
+    this.selection.forEach((id) => this.doc.update(id, {color: index, tint: null}))
   }
 
   private changeLayer(delta: number): void {
