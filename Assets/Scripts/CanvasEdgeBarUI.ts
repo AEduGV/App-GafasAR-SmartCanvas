@@ -9,15 +9,13 @@ import {TONE} from "./CanvasTheme"
 const HUB_SIZE = 4.6
 const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
-// Semicírculo de un solo anillo, desde arriba (90°) hacia la izquierda y abajo (270°): hacia dentro del
-// canvas, porque en la esquina derecha un círculo completo se saldría de la franja visible de la Preview.
-// Con nueve botones, el radio deja un poco de aire entre ellos.
-export const RING_RADIUS = 12
+// Círculo completo de un solo anillo alrededor del +, empezando arriba (90°) y girando hacia la izquierda.
+// Con nueve botones a 40° entre sí, este radio deja algo de aire entre ellos sin alejarlos del +.
+export const RING_RADIUS = 8
 // Formas, Stickers y Plantillas despliegan sus opciones en un arco exterior, centrado en su botón.
-export const SHAPE_RING_RADIUS = 17.5
-const SUB_STEP = 17
+export const SHAPE_RING_RADIUS = 13.5
+const SUB_STEP = 22
 const ARC_START = 90
-const ARC_END = 270
 const OPEN_TIME = 0.16
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
@@ -37,7 +35,7 @@ const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
   {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
 ]
 
-// En el orden del semicírculo, de arriba abajo.
+// En el orden del círculo, desde arriba y girando hacia la izquierda.
 const ITEMS: ItemDef[] = [
   ...TOOLS,
   {action: "shapes", label: "Formas", icon: ICON.category},
@@ -145,9 +143,9 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return btn
   }
 
-  /** Reparte los botones por igual en el semicírculo y cada arco exterior alrededor de su botón. */
+  /** Reparte los botones por igual en el círculo y cada arco exterior alrededor de su botón. */
   private layout(): void {
-    const step = (ARC_END - ARC_START) / (ITEMS.length - 1)
+    const step = 360 / ITEMS.length
     this.slots = ITEMS.map((def, i) => ({so: this.items.get(def.action).sceneObject, angle: ARC_START + step * i, radius: RING_RADIUS}))
     this.subRings.forEach((sub, key) => {
       const angle = ARC_START + step * ITEMS.findIndex((d) => d.action === key)
