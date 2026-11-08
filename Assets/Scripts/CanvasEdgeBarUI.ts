@@ -16,7 +16,13 @@ export const RING_RADIUS = 8
 export const SHAPE_RING_RADIUS = 13.5
 const SUB_STEP = 22
 const ARC_START = 90
-const OPEN_TIME = 0.16
+// Apertura en cascada: cada botón sale un poco después del anterior, girando hacia su sitio y con un leve rebote.
+const OPEN_TIME = 0.34
+const STAGGER = 0.035
+const SWIRL = 35
+// Los arcos exteriores se abren en abanico desde su botón.
+const SUB_TIME = 0.28
+const SUB_STAGGER = 0.08
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
 export type EdgeSubmenu = "shapes" | "stickers" | "templates"
@@ -70,6 +76,26 @@ const SUBMENUS: Record<EdgeSubmenu, {action: string; label: string; icon: Textur
   ],
 }
 
+function clamp01(x: number): number {
+  return Math.min(1, Math.max(0, x))
+}
+
+function easeOutCubic(x: number): number {
+  return 1 - Math.pow(1 - x, 3)
+}
+
+/** Pasa un poco de su destino y vuelve: da la sensación de muelle. */
+function easeOutBack(x: number): number {
+  const c1 = 1.4
+  return 1 + (c1 + 1) * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)
+}
+
+/** El avance propio de uno de `count` elementos que arrancan escalonados. */
+function staggered(progress: number, index: number, count: number, stagger: number): number {
+  const span = 1 - stagger * Math.max(0, count - 1)
+  return clamp01((progress - stagger * index) / span)
+}
+
 function polar(angle: number, radius: number): vec3 {
   const a = (angle * Math.PI) / 180
   return new vec3(Math.cos(a) * radius, Math.sin(a) * radius, 0)
@@ -88,6 +114,9 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   private active: EdgeTool | null = null
   private deleteArmed = false
   private openSub: EdgeSubmenu | null = null
+  // Ángulo de cada arco exterior (el de su botón) y cuánto está abierto, de 0 a 1.
+  private subAngles = new Map<EdgeSubmenu, number>()
+  private subProgress = new Map<EdgeSubmenu, number>()
   private opened = false
   private progress = 0
 
@@ -127,6 +156,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       }
       sub.enabled = false
       this.subRings.set(key, sub)
+      this.subProgress.set(key, 0)
     }
 
     this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
@@ -148,35 +178,68 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     const step = 360 / ITEMS.length
     this.slots = ITEMS.map((def, i) => ({so: this.items.get(def.action).sceneObject, angle: ARC_START + step * i, radius: RING_RADIUS}))
     this.subRings.forEach((sub, key) => {
-      const angle = ARC_START + step * ITEMS.findIndex((d) => d.action === key)
-      const children = sub.getChildrenCount()
-      for (let i = 0; i < children; i++) {
-        const offset = (i - (children - 1) / 2) * SUB_STEP
-        sub.getChild(i).getTransform().setLocalPosition(polar(angle + offset, SHAPE_RING_RADIUS))
-      }
+      this.subAngles.set(key, ARC_START + step * ITEMS.findIndex((d) => d.action === key))
+      this.applySubProgress(key)
     })
     this.applyProgress()
   }
 
   private applyProgress(): void {
-    const k = this.progress
-    const e = k * k * (3 - 2 * k)
-    const scale = Math.max(e, 0.01)
-    for (const slot of this.slots) {
+    const n = this.slots.length
+    this.slots.forEach((slot, i) => {
+      const k = staggered(this.progress, i, n, STAGGER)
+      const reach = easeOutBack(k)
+      const scale = Math.max(easeOutCubic(k), 0.01)
       const t = slot.so.getTransform()
-      t.setLocalPosition(polar(slot.angle, slot.radius * e))
+      // Sale del + girando un poco hasta su ángulo.
+      t.setLocalPosition(polar(slot.angle - SWIRL * (1 - easeOutCubic(k)), slot.radius * reach))
+      t.setLocalScale(new vec3(scale, scale, scale))
+    })
+    const e = easeOutBack(this.progress)
+    if (this.hub) setPillIconRotation(this.hub, this.showsPlus() ? (e * Math.PI) / 4 : 0)
+  }
+
+  /** Las opciones de un arco salen de su botón y se abren en abanico, primero las del centro. */
+  private applySubProgress(key: EdgeSubmenu): void {
+    const sub = this.subRings.get(key)
+    if (!sub) return
+    const angle = this.subAngles.get(key) ?? ARC_START
+    const p = this.subProgress.get(key) ?? 0
+    const children = sub.getChildrenCount()
+    const middle = (children - 1) / 2
+    for (let i = 0; i < children; i++) {
+      const order = Math.abs(i - middle)
+      const k = staggered(p, order, Math.ceil(middle) + 1, SUB_STAGGER)
+      const fan = easeOutBack(k)
+      const scale = Math.max(easeOutCubic(k), 0.01)
+      const radius = RING_RADIUS + (SHAPE_RING_RADIUS - RING_RADIUS) * fan
+      const t = sub.getChild(i).getTransform()
+      t.setLocalPosition(polar(angle + (i - middle) * SUB_STEP * fan, radius))
       t.setLocalScale(new vec3(scale, scale, scale))
     }
-    if (this.hub) setPillIconRotation(this.hub, this.showsPlus() ? (e * Math.PI) / 4 : 0)
+  }
+
+  private step(current: number, target: number, time: number): number {
+    const delta = getDeltaTime() / time
+    return target > current ? Math.min(target, current + delta) : Math.max(target, current - delta)
   }
 
   private animate(): void {
     const target = this.opened ? 1 : 0
-    if (this.progress === target) return
-    const delta = getDeltaTime() / OPEN_TIME
-    this.progress = target > this.progress ? Math.min(1, this.progress + delta) : Math.max(0, this.progress - delta)
-    this.applyProgress()
-    if (this.progress === 0 && this.ring) this.ring.enabled = false
+    if (this.progress !== target) {
+      this.progress = this.step(this.progress, target, OPEN_TIME)
+      this.applyProgress()
+      if (this.progress === 0 && this.ring) this.ring.enabled = false
+    }
+    this.subProgress.forEach((p, key) => {
+      const goal = this.openSub === key ? 1 : 0
+      if (p === goal) return
+      const next = this.step(p, goal, SUB_TIME)
+      this.subProgress.set(key, next)
+      this.applySubProgress(key)
+      const sub = this.subRings.get(key)
+      if (next === 0 && sub) sub.enabled = false
+    })
   }
 
   private showsPlus(): boolean {
@@ -232,8 +295,8 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
 
   closeSubmenus(): void {
     this.openSub = null
-    this.subRings.forEach((sub, key) => {
-      sub.enabled = false
+    // Cada arco se recoge hacia su botón y se apaga al terminar (en animate).
+    this.subRings.forEach((_sub, key) => {
       const btn = this.items.get(key)
       if (btn) paintPill(btn, false)
     })

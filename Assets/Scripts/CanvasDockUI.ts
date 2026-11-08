@@ -25,6 +25,9 @@ const GLASS_GLINT = new vec4(1, 1, 1, 0.65)
 // Al abrir brota del botón como una gota y se estira con un rebote; al cerrar se recoge más deprisa.
 const OPEN_TIME = 0.42
 const CLOSE_TIME = 0.2
+// Al cambiar de sección, las cabeceras se deslizan, el vidrio se ajusta y los botones nuevos aparecen escalonados.
+const SECTION_TIME = 0.3
+const SECTION_STAGGER = 0.06
 const SPRING = 1.5
 // Los iconos aparecen cuando el vidrio ya casi ha llegado a su tamaño.
 const CONTENT_FROM = 0.55
@@ -180,6 +183,12 @@ export class CanvasDockUI extends BaseScriptComponent {
   private sections: {key: string; header: SceneObject; items: SceneObject; count: number}[] = []
   private expanded = "tools"
   private progress = 0
+  // Transición entre secciones: de dónde a dónde va cada pieza y cuánto ha avanzado (1 = terminada).
+  private slide: {so: SceneObject; x: number; from: number; to: number}[] = []
+  private slideFrom = 0
+  private slideTo = 0
+  private slideProgress = 1
+  private appearing: SceneObject | null = null
   private buttons = new Map<string, CapsuleButton>()
   private placementColumn: SceneObject | null = null
   private ready = false
@@ -262,6 +271,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   }
 
   private animate(): void {
+    this.animateSections()
     const target = this.opened ? 1 : 0
     if (this.progress === target) return
     const step = getDeltaTime() / (this.opened ? OPEN_TIME : CLOSE_TIME)
@@ -420,13 +430,41 @@ export class CanvasDockUI extends BaseScriptComponent {
     return col
   }
 
+  private animateSections(): void {
+    if (this.slideProgress >= 1) return
+    this.slideProgress = Math.min(1, this.slideProgress + getDeltaTime() / SECTION_TIME)
+    this.applySlide()
+  }
+
+  private applySlide(): void {
+    const k = this.slideProgress
+    const e = 1 - Math.pow(1 - k, 3)
+    for (const s of this.slide) s.so.getTransform().setLocalPosition(new vec3(s.x, s.from + (s.to - s.from) * e, 0))
+    // Solo el alto cambia: el ancho de la barra es siempre el mismo.
+    this.setPlateSize(new vec2(HEADER_W + PAD * 2, this.slideFrom + (this.slideTo - this.slideFrom) * e))
+    const col = this.appearing
+    if (!col) return
+    const n = col.getChildrenCount()
+    const span = 1 - SECTION_STAGGER * Math.max(0, n - 1)
+    for (let i = 0; i < n; i++) {
+      const ki = Math.min(1, Math.max(0, (k - SECTION_STAGGER * i) / span))
+      const c1 = 1.4
+      const pop = Math.max(0.01, 1 + (c1 + 1) * Math.pow(ki - 1, 3) + c1 * Math.pow(ki - 1, 2))
+      col.getChild(i).getTransform().setLocalScale(new vec3(pop, pop, 1))
+    }
+  }
+
   /** Apila de arriba abajo las cabeceras y, bajo la abierta, sus botones; el vidrio se ajusta al total. */
   private layoutColumns(): void {
     const working = this.pendingPhase === "work"
     const x = PAD + HEADER_W / 2
     let y = -PAD
+    const before = new Map(this.slide.map((s) => [s.so, s.so.getTransform().getLocalPosition().y]))
+    const wasEnabled = new Map(this.sections.map((sec) => [sec.items, sec.items.enabled]))
+    this.slide = []
     const place = (so: SceneObject, h: number): void => {
-      so.getTransform().setLocalPosition(new vec3(x, y - h / 2, 0))
+      const to = y - h / 2
+      this.slide.push({so, x, from: before.get(so) ?? to, to})
       y -= h + GAP
     }
     if (working) {
@@ -447,7 +485,26 @@ export class CanvasDockUI extends BaseScriptComponent {
       this.placementColumn.enabled = !working
       if (!working) place(this.placementColumn, this.columnHeight(PLACEMENT.length))
     }
-    this.setPlateSize(new vec2(HEADER_W + PAD * 2, -y - GAP + PAD))
+    // Solo se anima un cambio de sección con el menú ya abierto; si no, todo va directo a su sitio.
+    const animated = this.opened && this.progress >= 1
+    this.slideFrom = this.plateSize.y
+    this.slideTo = -y - GAP + PAD
+    this.appearing = null
+    if (animated) {
+      for (const sec of this.sections) if (sec.items.enabled && !wasEnabled.get(sec.items)) this.appearing = sec.items
+      // Los botones nuevos salen de debajo de su cabecera.
+      const fresh = this.slide.find((s) => s.so === this.appearing)
+      if (fresh) fresh.from = fresh.to + this.columnHeight(1)
+    }
+    this.slideProgress = animated ? 0 : 1
+    if (!animated) {
+      for (const s of this.slide) s.from = s.to
+      this.slideFrom = this.slideTo
+      this.sections.forEach((sec) => {
+        for (let i = 0; i < sec.items.getChildrenCount(); i++) sec.items.getChild(i).getTransform().setLocalScale(vec3.one())
+      })
+    }
+    this.applySlide()
   }
 
   private paint(action: string): void {
