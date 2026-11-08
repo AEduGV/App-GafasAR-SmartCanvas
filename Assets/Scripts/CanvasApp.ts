@@ -64,10 +64,25 @@ const COLLAB_STEP = 0.9
 // Escala de su canvas: más pequeño que uno propio a esa distancia, para que quepan él y Ana en la vista.
 const COLLAB_SCALE = 1.1
 // Etiqueta con el nombre de quien creó un canvas ajeno, en unidades del canvas.
-const OWNER_TAG_H = 4
-const OWNER_TAG_INSET = 2.5
-const OWNER_TAG_TEXT = 90
-const OWNER_TAG_CHAR_W = 1.7
+const OWNER_TAG_H = 4.4
+const OWNER_TAG_INSET = 2
+const OWNER_TAG_OVERLAP = 0.2
+const OWNER_TAG_TEXT = 95
+const OWNER_TAG_CHAR_W = 1.8
+
+/** Pestaña: base recta (la que se une al borde) y esquinas de arriba redondeadas. */
+function tabOutline(w: number, h: number, r: number): vec2[] {
+  const pts: vec2[] = [new vec2(0, 0), new vec2(w, 0)]
+  const corner = (cx: number, cy: number, from: number): void => {
+    for (let i = 0; i <= 6; i++) {
+      const a = from + (i / 6) * (Math.PI / 2)
+      pts.push(new vec2(cx + Math.cos(a) * r, cy + Math.sin(a) * r))
+    }
+  }
+  corner(w - r, h - r, 0)
+  corner(r, h - r, Math.PI / 2)
+  return pts
+}
 // Pasos de Deshacer que recuerda cada canvas.
 const UNDO_LIMIT = 40
 const SAME_PLANE_LIMIT = 25
@@ -993,39 +1008,36 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   /**
-   * El canvas de otra persona no lleva menú radial ni Deshacer, porque no se puede editar: en la esquina
-   * superior izquierda va una etiqueta con un punto de su color y su nombre.
+   * El canvas de otra persona no lleva menú radial ni Deshacer, porque no se puede editar. En su lugar, una
+   * pestaña de su color sale del borde superior, junto a la esquina izquierda, con su nombre encima.
    */
   private makeOwnerTag(canvas: CanvasInstance): void {
     const owner = canvas.owner
     if (!owner) return
     const tag = global.scene.createSceneObject("OwnerTag")
     tag.setParent(canvas.root)
-    const w = OWNER_TAG_CHAR_W * owner.name.length + OWNER_TAG_H * 1.6
+    const h = OWNER_TAG_H
+    const w = OWNER_TAG_CHAR_W * owner.name.length + h * 1.4
     const b = canvas.renderer.getBounds()
-    const left = b.minX + OWNER_TAG_INSET
-    const top = b.maxY - OWNER_TAG_INSET
-    tag.getTransform().setLocalPosition(new vec3(left, top - OWNER_TAG_H / 2, 1.4))
-    const plate = new MeshSlot(tag, "Plate", withAlpha(COLOR.surface, 0.92), false)
-    appendFill(plate.begin(), roundedRect(w, OWNER_TAG_H, OWNER_TAG_H / 2).map((p) => new vec2(p.x + w / 2, p.y)), 0)
-    plate.commit()
-    // Opaco y algo por delante: el fondo semitransparente de la etiqueta no lo tapa.
-    const dot = new MeshSlot(tag, "Dot", owner.color)
-    appendFill(dot.begin(), roundedRect(OWNER_TAG_H * 0.4, OWNER_TAG_H * 0.4, OWNER_TAG_H * 0.2).map((p) => new vec2(p.x + OWNER_TAG_H * 0.55, p.y)), 0.2)
-    dot.commit()
+    // La base se mete un poco en el borde para que pestaña y borde se vean como una sola pieza.
+    tag.getTransform().setLocalPosition(new vec3(b.minX + OWNER_TAG_INSET, b.maxY - OWNER_TAG_OVERLAP, 0.05))
+    const fill = new MeshSlot(tag, "Tab", owner.color)
+    appendFill(fill.begin(), tabOutline(w, h, h * 0.4), 0)
+    fill.commit()
     const labelSo = global.scene.createSceneObject("Name")
     labelSo.setParent(tag)
-    labelSo.getTransform().setLocalPosition(new vec3(OWNER_TAG_H * 0.95, 0, 0.1))
+    labelSo.getTransform().setLocalPosition(new vec3(h * 0.7, h / 2, 0.15))
     const t = labelSo.createComponent("Component.Text") as Text
     t.font = THEME_FONT
     t.size = OWNER_TAG_TEXT
     t.depthTest = true
     t.text = owner.name
-    t.textFill.color = COLOR.text
+    // Texto oscuro sobre el color: sobre un naranja o amarillo vivos se lee mejor que el blanco.
+    t.textFill.color = COLOR.surface
     t.horizontalAlignment = HorizontalAlignment.Left
     t.verticalAlignment = VerticalAlignment.Center
     t.horizontalOverflow = HorizontalOverflow.Overflow
-    t.layoutRect = Rect.create(0, w, -OWNER_TAG_H / 2, OWNER_TAG_H / 2)
+    t.layoutRect = Rect.create(0, w, -h / 2, h / 2)
   }
 
   /** Cada cierto tiempo, Ana añade la siguiente pieza de la plantilla y la señala mientras la dibuja. */
