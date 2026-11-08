@@ -34,12 +34,14 @@ const CONTENT_FROM = 0.55
 
 // Barra lateral de una sola columna con secciones plegables: una cabecera con nombre por sección y,
 // debajo de la abierta, sus botones. Con la sección más larga abierta cabe justo en la franja visible.
-const BTN_H = 2.8
+// Los botones de la barra son círculos del tamaño del que la abre.
+const ROUND = 4.4
+const BTN_H = ROUND
 const HEADER_H = 2.6
 const HEADER_W = 9
-const ICON_W = 5.2
+const ICON_W = ROUND
 // Anchura de la columna del menú: solo lleva iconos.
-const COLUMN_W = ICON_W + 0.8
+const COLUMN_W = ROUND
 const GAP = 0.4
 const PAD = 1
 
@@ -51,7 +53,7 @@ const STATUS_SIZE = 41
 const VIEW_DISTANCE = 50
 const VIEW_REFERENCE = 105
 // Esquina superior izquierda de la franja donde la Preview muestra lo virtual, en esas medidas.
-const TOGGLE_SIZE = 4.4
+const TOGGLE_SIZE = ROUND
 const TOGGLE_X = -27
 const TOGGLE_Y = 31
 const STATUS_H = 3.4
@@ -80,8 +82,7 @@ interface ButtonDef {
 const MAIN: ButtonDef[] = [
   {label: "Cuenta", action: "info:account", icon: ICON.account_circle},
   {label: "Colaboración", action: "info:collab", icon: ICON.groups},
-  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.save},
-  {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
+  {label: "Guardar", action: "info:save", icon: ICON.save},
   {label: "Tutoriales", action: "info:tutorials", icon: ICON.school},
   {label: "Salir", action: "exit", icon: ICON.logout},
 ]
@@ -112,6 +113,12 @@ const PANELS: Record<string, InfoPanel> = {
 }
 
 const PANEL_W = 19
+
+// Opciones que despliega Guardar, a su derecha.
+const SAVE_OPTIONS: ButtonDef[] = [
+  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.save},
+  {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
+]
 const PANEL_GAP = 1
 const PANEL_BTN_H = 2.6
 const PANEL_LINE_H = 2.2
@@ -157,6 +164,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   private panelBody: SceneObject | null = null
   private openPanel: string | null = null
   private panelSize = new vec2(PANEL_W, 10)
+  private panelTop = MENU_TOP
   private ready = false
   private pendingStatus = ""
   private pendingTone: StatusTone = "normal"
@@ -346,11 +354,15 @@ export class CanvasDockUI extends BaseScriptComponent {
       return
     }
     this.setActive("info:" + next, true)
-    const def = PANELS[next]
     const body = global.scene.createSceneObject("Body")
     body.setParent(this.panel)
     body.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
     this.panelBody = body
+    if (next === "save") {
+      this.buildSaveOptions(body)
+      return
+    }
+    const def = PANELS[next]
     const inner = PANEL_W - PAD * 2
     let y = -PAD
     const text = (value: string, size: number, h: number, color: vec4): void => {
@@ -380,14 +392,40 @@ export class CanvasDockUI extends BaseScriptComponent {
       y -= PANEL_BTN_H + GAP
     }
     this.panelSize = new vec2(PANEL_W, -y + PAD - GAP)
+    this.drawPanelPlate()
+    this.showPanelAt(MENU_TOP)
+  }
+
+  /** Las dos formas de guardar, en fila y a la altura del botón Guardar. */
+  private buildSaveOptions(body: SceneObject): void {
+    SAVE_OPTIONS.forEach((def, i) => {
+      const btn = makePill(body, def.label, ROUND, ROUND, BUTTON_SIZE, () => false, () => {
+        this._onAction.invoke(def.action)
+        this.togglePanel(null)
+      }, def.icon)
+      btn.getSceneObject().getTransform().setLocalPosition(new vec3(PAD + ROUND / 2 + i * (ROUND + GAP), -PAD - ROUND / 2, 0))
+    })
+    this.panelSize = new vec2(PAD * 2 + SAVE_OPTIONS.length * ROUND + (SAVE_OPTIONS.length - 1) * GAP, PAD * 2 + ROUND)
+    this.drawPanelPlate()
+    const index = MAIN.findIndex((d) => d.action === "info:save")
+    const center = MENU_TOP - PAD - index * (ROUND + GAP) - ROUND / 2
+    this.showPanelAt(center + this.panelSize.y / 2)
+  }
+
+  private drawPanelPlate(): void {
     const size = this.panelSize
     const pts = roundedRect(size.x, size.y, PLATE_RADIUS).map((p) => p.add(new vec2(size.x / 2, -size.y / 2)))
     if (this.panelPlate) {
       appendFill(this.panelPlate.begin(), pts, 0.2)
       this.panelPlate.commit()
     }
-    // A la derecha del menú, con su borde superior alineado.
-    this.panel.getTransform().setLocalPosition(new vec3(MENU_LEFT + this.plateSize.x + PANEL_GAP, MENU_TOP, 0))
+  }
+
+  /** A la derecha del menú, con su borde superior a esta altura. */
+  private showPanelAt(top: number): void {
+    if (!this.panel) return
+    this.panelTop = top
+    this.panel.getTransform().setLocalPosition(new vec3(MENU_LEFT + this.plateSize.x + PANEL_GAP, top, 0))
     this.panel.enabled = true
   }
 
@@ -605,6 +643,6 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (x > MENU_LEFT && x < MENU_LEFT + size.x && y < MENU_TOP && y > MENU_TOP - size.y) return true
     if (!this.openPanel) return false
     const left = MENU_LEFT + size.x + PANEL_GAP
-    return x > left && x < left + this.panelSize.x && y < MENU_TOP && y > MENU_TOP - this.panelSize.y
+    return x > left && x < left + this.panelSize.x && y < this.panelTop && y > this.panelTop - this.panelSize.y
   }
 }
