@@ -41,6 +41,8 @@ const LINK_BUTTON_GAP = 15
 const LINK_BUTTON_SIZE = 4.6
 const LINK_BUTTON_Z = 2
 const UNDO_SIZE = 4.2
+// Separación entre un canvas y su copia, en unidades del canvas.
+const DUPLICATE_GAP = 8
 // Pasos de Deshacer que recuerda cada canvas.
 const UNDO_LIMIT = 40
 const SAME_PLANE_LIMIT = 25
@@ -764,7 +766,10 @@ export class CanvasApp extends BaseScriptComponent {
     so.setParent(canvas.root)
     const bar = so.createComponent(CanvasEdgeBarUI.getTypeName()) as CanvasEdgeBarUI
     bar.onAction.add((action) => this.onEdgeAction(canvas, action))
-    bar.onShape.add((shape) => this.changeShape(canvas, shape))
+    bar.onPick.add((action) => {
+      this.activate(canvas)
+      this.onAction(action)
+    })
     canvas.bar = bar
     const holder = global.scene.createSceneObject("UndoButton")
     holder.setParent(canvas.root)
@@ -803,10 +808,15 @@ export class CanvasApp extends BaseScriptComponent {
       }
       return
     }
-    if (action === "shapeMenu") {
-      const open = !canvas.bar?.isShapeOpen
-      canvas.bar?.setShapeMenu(open, canvas.renderer.shape)
-      this.dock.setStatus(open ? "Elige la forma de este canvas" : this.toolHint())
+    if (action === "shapes" || action === "stickers" || action === "templates") {
+      const open = canvas.bar?.toggleSubmenu(action) ?? false
+      const prompt = action === "shapes" ? "Elige una forma para añadir" : action === "stickers" ? "Elige un sticker" : "Elige una plantilla"
+      this.dock.setStatus(open ? prompt : "Elige una herramienta. Pulsa fuera para cerrar")
+      return
+    }
+    if (action === "duplicate") {
+      this.closeEdgeMenu()
+      this.duplicateCanvas(canvas)
       return
     }
     // La papelera deja el menú abierto: puede hacer falta pulsarla otra vez para confirmar.
@@ -829,10 +839,32 @@ export class CanvasApp extends BaseScriptComponent {
     const canvas = this.menuCanvas
     if (!canvas) return false
     this.menuCanvas = null
-    canvas.bar?.setShapeMenu(false, canvas.renderer.shape)
+    canvas.bar?.closeSubmenus()
     canvas.bar?.setOpen(false)
     this.dock.setStatus(this.toolHint())
     return true
+  }
+
+  /** Una copia del canvas con todo su contenido, justo a su derecha y con la misma forma, tamaño y orientación. */
+  private duplicateCanvas(src: CanvasInstance): void {
+    const copy = this.createCanvas(src.orientation)
+    copy.renderer.setShape(src.renderer.shape)
+    copy.renderer.setBounds(src.renderer.getBounds())
+    copy.doc.restore(src.doc.serialize())
+    const st = src.transform
+    const b = src.renderer.getBounds()
+    const t = copy.transform
+    t.setWorldRotation(st.getWorldRotation())
+    t.setWorldScale(st.getWorldScale())
+    copy.scale = src.scale
+    t.setWorldPosition(st.getWorldPosition().add(st.right.uniformScale((b.maxX - b.minX + DUPLICATE_GAP) * src.scale)))
+    copy.root.enabled = true
+    copy.renderer.setContentVisible(true)
+    this.ensureEdgeBar(copy).sceneObject.enabled = true
+    this.activate(copy)
+    this.refreshBorders()
+    this.dock.setStatus("Canvas duplicado a la derecha del original")
+    this.log("canvas " + src.id + " duplicado en " + copy.id)
   }
 
   private changeShape(canvas: CanvasInstance, shape: CanvasShape): void {
@@ -2392,6 +2424,9 @@ export class CanvasApp extends BaseScriptComponent {
         break
       case "template":
         this.useTemplate(arg as TemplateName)
+        break
+      case "canvasShape":
+        this.changeShape(this.active, arg as CanvasShape)
         break
       case "flip":
         this.flip()

@@ -206,6 +206,12 @@ export class CanvasDocument {
       this.connections.set(copy.id, copy)
       this.emit({type: "connAdded", id: copy.id})
     }
+    // Lo que se cree después no debe repetir un identificador de lo restaurado (al duplicar, viene de otro canvas).
+    const ids: string[] = [...els.map((e) => e.id), ...els.map((e) => e.groupId ?? ""), ...parsed.conns.map((c) => c.id)]
+    for (const id of ids) {
+      const m = /_(\d+)$/.exec(id)
+      if (m) this.nextId = Math.max(this.nextId, Number(m[1]) + 1)
+    }
   }
 
   clear(): void {

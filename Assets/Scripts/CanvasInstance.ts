@@ -93,7 +93,7 @@ export class CanvasInstance {
   /** La zona del botón + o, abierto, de su anillo, incluidos los huecos entre botones. */
   onEdgeBar(p: vec2): boolean {
     if (!this.bar) return false
-    const reach = !this.bar.isOpen ? 0 : this.bar.isShapeOpen ? SHAPE_RING_RADIUS : RING_RADIUS
+    const reach = !this.bar.isOpen ? 0 : this.bar.hasSubmenuOpen ? SHAPE_RING_RADIUS : RING_RADIUS
     return p.distance(this.hubPoint) <= reach + HUB_REACH
   }
 

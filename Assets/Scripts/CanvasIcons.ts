@@ -12,6 +12,7 @@ export const ICON = {
   check_circle: requireAsset("../Icons/check_circle_128x128.png") as Texture,
   circle: requireAsset("../Icons/circle_128x128.png") as Texture,
   close: requireAsset("../Icons/close_128x128.png") as Texture,
+  content_copy: requireAsset("../Icons/content_copy_128x128.png") as Texture,
   crop_free: requireAsset("../Icons/crop_free_128x128.png") as Texture,
   crop_landscape: requireAsset("../Icons/crop_landscape_128x128.png") as Texture,
   crop_portrait: requireAsset("../Icons/crop_portrait_128x128.png") as Texture,

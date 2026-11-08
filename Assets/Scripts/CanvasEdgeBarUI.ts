@@ -2,7 +2,6 @@
 // Es hijo del canvas, así que viaja con él. Solo decide cómo se ve: las acciones las resuelve CanvasApp.
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
-import {CanvasShape} from "./CanvasGeometry"
 import {ICON} from "./CanvasIcons"
 import {addPillEdge, makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
 import {TONE} from "./CanvasTheme"
@@ -12,29 +11,66 @@ const ITEM_SIZE = 4.2
 const TEXT_SIZE = 56
 // Semicírculo de un solo anillo, desde arriba (90°) hacia la izquierda y abajo (270°): hacia dentro del
 // canvas, porque en la esquina derecha un círculo completo se saldría de la franja visible de la Preview.
-export const RING_RADIUS = 10
-export const SHAPE_RING_RADIUS = 14.8
+// Con nueve botones, el radio deja un poco de aire entre ellos.
+export const RING_RADIUS = 12
+// Formas, Stickers y Plantillas despliegan sus opciones en un arco exterior, centrado en su botón.
+export const SHAPE_RING_RADIUS = 17.5
+const SUB_STEP = 17
 const ARC_START = 90
 const ARC_END = 270
-const SHAPE_STEP = 18
 const OPEN_TIME = 0.16
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
-export type EdgeAction = EdgeTool | "delete" | "shapeMenu" | "menu"
+export type EdgeSubmenu = "shapes" | "stickers" | "templates"
+export type EdgeAction = EdgeTool | EdgeSubmenu | "duplicate" | "delete" | "menu"
+
+interface ItemDef {
+  action: EdgeAction
+  label: string
+  icon: Texture
+}
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
   {action: "draw", label: "Dibujar", icon: ICON.draw},
   {action: "erase", label: "Goma", icon: ICON.ink_eraser},
-  {action: "write", label: "Escribir", icon: ICON.edit_note},
+  {action: "write", label: "Escribir texto", icon: ICON.edit_note},
   {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
 ]
 
-const SHAPES: {shape: CanvasShape; label: string; icon: Texture}[] = [
-  {shape: "rect", label: "Rectángulo", icon: ICON.rectangle},
-  {shape: "oval", label: "Óvalo", icon: ICON.circle},
-  {shape: "triangle", label: "Triángulo", icon: ICON.change_history},
-  {shape: "diamond", label: "Rombo", icon: ICON.diamond},
+// En el orden del semicírculo, de arriba abajo.
+const ITEMS: ItemDef[] = [
+  ...TOOLS,
+  {action: "shapes", label: "Formas", icon: ICON.category},
+  {action: "stickers", label: "Stickers", icon: ICON.kid_star},
+  {action: "templates", label: "Plantillas", icon: ICON.dashboard},
+  {action: "duplicate", label: "Duplicar canvas", icon: ICON.content_copy},
+  {action: "delete", label: "Borrar canvas", icon: ICON.delete},
 ]
+
+// Las opciones de cada arco usan las mismas acciones que el menú principal.
+const SUBMENUS: Record<EdgeSubmenu, {action: string; label: string; icon: Texture}[]> = {
+  shapes: [
+    {action: "shape:rect", label: "Rectángulo", icon: ICON.rectangle},
+    {action: "shape:circle", label: "Círculo", icon: ICON.circle},
+    {action: "shape:triangle", label: "Triángulo", icon: ICON.change_history},
+    {action: "shape:process", label: "Proceso", icon: ICON.square},
+    {action: "shape:decision", label: "Decisión", icon: ICON.diamond},
+    {action: "shape:terminator", label: "Inicio / fin", icon: ICON.stadium},
+  ],
+  stickers: [
+    {action: "sticker:star", label: "Estrella", icon: ICON.star},
+    {action: "sticker:heart", label: "Corazón", icon: ICON.favorite},
+    {action: "sticker:warning", label: "Aviso", icon: ICON.warning},
+    {action: "sticker:done", label: "Hecho", icon: ICON.check_circle},
+  ],
+  templates: [
+    {action: "template:flow", label: "Flujo", icon: ICON.account_tree},
+    {action: "template:cards", label: "Card sorting", icon: ICON.view_kanban},
+    {action: "template:journey", label: "User journey", icon: ICON.route},
+    {action: "template:architecture", label: "Arquitectura", icon: ICON.hub},
+    {action: "template:sequence", label: "Secuencia", icon: ICON.format_list_numbered},
+  ],
+}
 
 function polar(angle: number, radius: number): vec3 {
   const a = (angle * Math.PI) / 180
@@ -44,20 +80,16 @@ function polar(angle: number, radius: number): vec3 {
 @component
 export class CanvasEdgeBarUI extends BaseScriptComponent {
   private _onAction = new Event<EdgeAction>()
-  private _onShape = new Event<CanvasShape>()
+  private _onPick = new Event<string>()
   private hub: CapsuleButton | null = null
   private ring: SceneObject | null = null
-  private shapeRing: SceneObject | null = null
-  private shapeButton: CapsuleButton | null = null
-  private deleteButton: CapsuleButton | null = null
-  private buttons = new Map<EdgeTool, CapsuleButton>()
-  private shapeItems = new Map<CanvasShape, CapsuleButton>()
+  private items = new Map<EdgeAction, CapsuleButton>()
+  private subRings = new Map<EdgeSubmenu, SceneObject>()
   // Cada botón del menú con el ángulo y el radio que le tocan.
   private slots: {so: SceneObject; angle: number; radius: number}[] = []
   private active: EdgeTool | null = null
   private deleteArmed = false
-  private shapeOpen = false
-  private shapeCurrent: CanvasShape = "rect"
+  private openSub: EdgeSubmenu | null = null
   private opened = false
   private progress = 0
 
@@ -65,16 +97,17 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return this._onAction.publicApi()
   }
 
-  get onShape(): PublicApi<CanvasShape> {
-    return this._onShape.publicApi()
+  /** Una opción de un arco exterior, con la acción del menú principal que le corresponde. */
+  get onPick(): PublicApi<string> {
+    return this._onPick.publicApi()
   }
 
   get isOpen(): boolean {
     return this.opened
   }
 
-  get isShapeOpen(): boolean {
-    return this.shapeOpen
+  get hasSubmenuOpen(): boolean {
+    return this.openSub !== null
   }
 
   onAwake(): void {
@@ -83,18 +116,20 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     this.ring = global.scene.createSceneObject("Ring")
     this.ring.setParent(this.sceneObject)
 
-    for (const def of TOOLS) {
-      this.buttons.set(def.action, this.makeItem(this.ring, def.label, def.icon, () => this.active === def.action, () => this._onAction.invoke(def.action)))
+    for (const def of ITEMS) {
+      const isActive = (): boolean =>
+        def.action === "delete" ? this.deleteArmed : this.active === def.action || this.openSub === def.action
+      this.items.set(def.action, this.makeItem(this.ring, def.label, def.icon, isActive, () => this._onAction.invoke(def.action)))
     }
-    this.shapeButton = this.makeItem(this.ring, "Forma", ICON.category, () => this.shapeOpen, () => this._onAction.invoke("shapeMenu"))
-    this.deleteButton = this.makeItem(this.ring, "Borrar canvas", ICON.delete, () => this.deleteArmed, () => this._onAction.invoke("delete"))
-
-    this.shapeRing = global.scene.createSceneObject("ShapeRing")
-    this.shapeRing.setParent(this.ring)
-    for (const def of SHAPES) {
-      this.shapeItems.set(def.shape, this.makeItem(this.shapeRing, def.label, def.icon, () => this.shapeCurrent === def.shape, () => this._onShape.invoke(def.shape)))
+    for (const key of Object.keys(SUBMENUS) as EdgeSubmenu[]) {
+      const sub = global.scene.createSceneObject("Sub_" + key)
+      sub.setParent(this.ring)
+      for (const opt of SUBMENUS[key]) {
+        this.makeItem(sub, opt.label, opt.icon, () => false, () => this._onPick.invoke(opt.action))
+      }
+      sub.enabled = false
+      this.subRings.set(key, sub)
     }
-    this.shapeRing.enabled = false
 
     this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
     addPillEdge(this.hub)
@@ -110,19 +145,18 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     return btn
   }
 
-  /** Reparte las herramientas por igual en el semicírculo. */
+  /** Reparte los botones por igual en el semicírculo y cada arco exterior alrededor de su botón. */
   private layout(): void {
-    const list: CapsuleButton[] = TOOLS.map((def) => this.buttons.get(def.action))
-    list.push(this.shapeButton)
-    list.push(this.deleteButton)
-    const step = (ARC_END - ARC_START) / (list.length - 1)
-    this.slots = list.map((btn, i) => ({so: btn.sceneObject, angle: ARC_START + step * i, radius: RING_RADIUS}))
-    const shapeSlot = this.slots.find((s) => s.so === this.shapeButton.sceneObject)
-    let i = 0
-    for (const def of SHAPES) {
-      const offset = (i++ - (SHAPES.length - 1) / 2) * SHAPE_STEP
-      this.shapeItems.get(def.shape)?.sceneObject.getTransform().setLocalPosition(polar(shapeSlot.angle + offset, SHAPE_RING_RADIUS))
-    }
+    const step = (ARC_END - ARC_START) / (ITEMS.length - 1)
+    this.slots = ITEMS.map((def, i) => ({so: this.items.get(def.action).sceneObject, angle: ARC_START + step * i, radius: RING_RADIUS}))
+    this.subRings.forEach((sub, key) => {
+      const angle = ARC_START + step * ITEMS.findIndex((d) => d.action === key)
+      const children = sub.getChildrenCount()
+      for (let i = 0; i < children; i++) {
+        const offset = (i - (children - 1) / 2) * SUB_STEP
+        sub.getChild(i).getTransform().setLocalPosition(polar(angle + offset, SHAPE_RING_RADIUS))
+      }
+    })
     this.applyProgress()
   }
 
@@ -163,29 +197,48 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     if (open === this.opened) return
     this.opened = open
     if (open && this.ring) this.ring.enabled = true
-    if (!open) this.setShapeMenu(false, this.shapeCurrent)
+    if (!open) this.closeSubmenus()
     this.refreshHub()
   }
 
   /** Con el menú cerrado, el botón + muestra la herramienta activa. */
   setActive(action: EdgeTool | null): void {
     this.active = action
-    this.buttons.forEach((btn, key) => paintPill(btn, key === action))
+    for (const def of TOOLS) {
+      const btn = this.items.get(def.action)
+      if (btn) paintPill(btn, def.action === action)
+    }
     this.refreshHub()
   }
 
   /** Color de aviso mientras espera la segunda pulsación que confirma el borrado. */
   setDeleteArmed(armed: boolean): void {
     this.deleteArmed = armed
-    if (this.deleteButton) paintPill(this.deleteButton, armed, TONE.warning)
+    const btn = this.items.get("delete")
+    if (btn) paintPill(btn, armed, TONE.warning)
   }
 
-  setShapeMenu(open: boolean, current: CanvasShape): void {
-    this.shapeOpen = open
-    this.shapeCurrent = current
-    if (this.shapeRing) this.shapeRing.enabled = open
-    if (this.shapeButton) paintPill(this.shapeButton, open)
-    this.shapeItems.forEach((btn, shape) => paintPill(btn, shape === current))
+  /** Abre el arco de esa opción, o lo cierra si ya estaba abierto. Devuelve si quedó abierto. */
+  toggleSubmenu(key: EdgeSubmenu): boolean {
+    const open = this.openSub !== key
+    this.closeSubmenus()
+    if (open) {
+      this.openSub = key
+      const sub = this.subRings.get(key)
+      if (sub) sub.enabled = true
+      const btn = this.items.get(key)
+      if (btn) paintPill(btn, true)
+    }
+    return open
+  }
+
+  closeSubmenus(): void {
+    this.openSub = null
+    this.subRings.forEach((sub, key) => {
+      sub.enabled = false
+      const btn = this.items.get(key)
+      if (btn) paintPill(btn, false)
+    })
   }
 
   setPose(position: vec3, rotation: quat): void {

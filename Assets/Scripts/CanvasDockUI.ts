@@ -140,6 +140,10 @@ const PANES: Record<string, ButtonDef[]> = {
     {label: "Horizontal / vertical", action: "flip", icon: ICON.screen_rotation},
     {label: "Colocar de nuevo", action: "replace", icon: ICON.place_item},
     {label: "Vaciar", action: "clear", icon: ICON.delete_sweep},
+    {label: "Canvas rectangular", action: "canvasShape:rect", icon: ICON.rectangle},
+    {label: "Canvas ovalado", action: "canvasShape:oval", icon: ICON.circle},
+    {label: "Canvas triangular", action: "canvasShape:triangle", icon: ICON.change_history},
+    {label: "Canvas en rombo", action: "canvasShape:diamond", icon: ICON.diamond},
   ],
 }
 
