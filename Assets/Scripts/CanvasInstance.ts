@@ -32,6 +32,9 @@ export class CanvasInstance {
   undoBounds: Bounds | null = null
   undoShape: string | null = null
   undoButton: SceneObject | null = null
+  // Canvas de un colaborador de ejemplo: su nombre y color, y si lo está construyendo ahora (no se puede tocar).
+  owner: {name: string; color: vec4} | null = null
+  busy = false
 
   constructor(parent: SceneObject, readonly id: string, orientation: Orientation) {
     this.orientation = orientation

@@ -385,9 +385,15 @@ export class CanvasDockUI extends BaseScriptComponent {
     for (const line of def.lines) text(line, PANEL_TEXT_SIZE, PANEL_LINE_H, COLOR.textMuted)
     y -= GAP * 2
     for (const label of def.buttons) {
-      const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => false, () =>
+      const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => false, () => {
+        // Invitar trae a un colaborador de ejemplo; los demás botones aún no hacen nada.
+        if (label === "Invitar a alguien") {
+          this._onAction.invoke("invite")
+          this.togglePanel(null)
+          return
+        }
         this.setStatus("«" + label + "» es de ejemplo: todavía no está disponible")
-      )
+      })
       btn.getSceneObject().getTransform().setLocalPosition(new vec3(PAD + inner / 2, y - PANEL_BTN_H / 2, 0))
       y -= PANEL_BTN_H + GAP
     }
@@ -595,6 +601,11 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (active) this.activeActions.add(action)
     else this.activeActions.delete(action)
     if (this.ready) this.paint(action)
+  }
+
+  /** Quién más está en el espacio, para el panel de Colaboración. */
+  setPeople(names: string[]): void {
+    PANELS.collab.lines[0] = names.length === 0 ? "En este espacio: solo tú" : "En este espacio: tú y " + names.join(", ")
   }
 
   /** Las pestañas de antes son ahora secciones: se despliega la suya. */

@@ -14,6 +14,7 @@ import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance
 import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire, tintOf} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
+import {CanvasMannequin} from "./CanvasMannequin"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -44,6 +45,22 @@ const LINK_BUTTON_Z = 2
 const UNDO_SIZE = 4.2
 // Separación entre un canvas y su copia, en unidades del canvas.
 const DUPLICATE_GAP = 8
+// Colaboradora de ejemplo (para el vídeo): dónde aparece, su canvas y el ritmo al que construye la plantilla.
+const COLLAB_NAME = "Ana"
+const COLLAB_COLOR = new vec4(1, 0.62, 0.04, 1)
+const COLLAB_TEMPLATE: TemplateName = "flow"
+const COLLAB_ANGLE = 28
+const COLLAB_DISTANCE = 230
+const COLLAB_LIFT = -12
+const COLLAB_EYE_HEIGHT = 160
+const COLLAB_CANVAS_W = 80
+const COLLAB_CANVAS_H = 52
+const COLLAB_SIDE_GAP = 12
+const COLLAB_FRONT = 40
+const COLLAB_FIRST_DELAY = 1.2
+const COLLAB_STEP = 0.9
+// Escala de su canvas: más pequeño que uno propio a esa distancia, para que quepan él y Ana en la vista.
+const COLLAB_SCALE = 1.1
 // Pasos de Deshacer que recuerda cada canvas.
 const UNDO_LIMIT = 40
 const SAME_PLANE_LIMIT = 25
@@ -188,6 +205,15 @@ export class CanvasApp extends BaseScriptComponent {
   private active: CanvasInstance
   private links: CanvasLinks
   private handwriting: HandwritingAssist
+  // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
+  private collaborator: {
+    mannequin: CanvasMannequin
+    canvas: CanvasInstance
+    steps: {kind: "el" | "conn"; data: CanvasElement | {from: string; to: string; label: string}}[]
+    ids: Map<string, string>
+    next: number
+    nextAt: number
+  } | null = null
   private linkRubber: MeshSlot
   private placing: Placing | null = null
   private nextCanvasId = 1
@@ -297,11 +323,12 @@ export class CanvasApp extends BaseScriptComponent {
     this.refreshBorders()
   }
 
-  /** El canvas seleccionado (el activo) brilla entero en cian; los demás quedan en gris tenue. */
+  /** El canvas seleccionado (el activo) brilla entero en cian; los demás quedan en gris tenue, o del color de su dueño. */
   private refreshBorders(candidate: CanvasInstance | null = null): void {
     for (const c of this.canvases) {
       const selected = c === this.active && c.placed
-      c.renderer.setBorderColor(c === candidate || selected ? COLOR.primary : BORDER_IDLE)
+      const idle = c.owner ? withAlpha(c.owner.color, 0.9) : BORDER_IDLE
+      c.renderer.setBorderColor(c === candidate || selected ? COLOR.primary : idle)
       c.renderer.setSelected(selected)
     }
   }
@@ -881,6 +908,125 @@ export class CanvasApp extends BaseScriptComponent {
     canvas.bar?.setOpen(false)
     this.dock.setStatus(this.toolHint())
     return true
+  }
+
+  /**
+   * Trae a Ana, una colaboradora de ejemplo: un maniquí que aparece delante y a la derecha, de pie en el suelo,
+   * junto a un canvas suyo en el que va construyendo la plantilla de flujo mientras lo señala.
+   */
+  private inviteCollaborator(): void {
+    if (this.collaborator) {
+      this.dock.setStatus(this.collaborator.mannequin.name + " ya está en este espacio")
+      return
+    }
+    const eye = this.camera.getWorldPosition()
+    const forward = this.flatForward()
+    const side = vec3.up().cross(forward).uniformScale(-1).normalize()
+    // Algo a la derecha de la mirada, a una distancia en la que se ve entero.
+    const angle = (COLLAB_ANGLE * Math.PI) / 180
+    const dir = forward.uniformScale(Math.cos(angle)).add(side.uniformScale(Math.sin(angle))).normalize()
+    const center = eye.add(dir.uniformScale(COLLAB_DISTANCE)).add(new vec3(0, COLLAB_LIFT, 0))
+    const done = (floorY: number): void => this.spawnCollaborator(center, floorY)
+    const below = new vec3(center.x, eye.y, center.z)
+    if (!this.hitSession) {
+      done(eye.y - COLLAB_EYE_HEIGHT)
+      return
+    }
+    this.hitSession.hitTest(below, below.add(new vec3(0, -400, 0)), (result) => {
+      done(result ? result.position.y : eye.y - COLLAB_EYE_HEIGHT)
+    })
+  }
+
+  private spawnCollaborator(center: vec3, floorY: number): void {
+    if (this.collaborator) return
+    const eye = this.camera.getWorldPosition()
+    const toEye = eye.sub(center)
+    const normal = new vec3(toEye.x, 0, toEye.z).normalize()
+    const right = vec3.up().cross(normal).normalize()
+    const k = Math.min(this.scaleForDistance(toEye.length), COLLAB_SCALE)
+    const w = COLLAB_CANVAS_W
+    const h = COLLAB_CANVAS_H
+
+    const canvas = this.createCanvas("vertical")
+    canvas.owner = {name: COLLAB_NAME, color: COLLAB_COLOR}
+    canvas.busy = true
+    const t = canvas.transform
+    t.setWorldPosition(center)
+    t.setWorldRotation(quat.lookAt(normal, vec3.up()))
+    t.setWorldScale(new vec3(k, k, k))
+    canvas.scale = k
+    const bounds = {minX: -w / 2, maxX: w / 2, minY: -h / 2, maxY: h / 2}
+    canvas.renderer.setBounds(bounds)
+    canvas.root.enabled = true
+    canvas.renderer.setContentVisible(true)
+    this.ensureEdgeBar(canvas).sceneObject.enabled = true
+
+    // La plantilla se prepara aparte y se pasa al canvas pieza a pieza, como si la fuera dibujando.
+    const draft = new CanvasDocument()
+    applyTemplate(draft, COLLAB_TEMPLATE, bounds)
+    const steps: {kind: "el" | "conn"; data: CanvasElement | {from: string; to: string; label: string}}[] = []
+    const els = Array.from(draft.elements.values()).sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+    for (const el of els) steps.push({kind: "el", data: el})
+    draft.connections.forEach((c) => steps.push({kind: "conn", data: {from: c.from, to: c.to, label: c.label}}))
+
+    // De pie a la derecha de su canvas (visto desde aquí), algo adelantada y girada hacia él.
+    const half = (w / 2) * k
+    const feet = center.add(right.uniformScale(half + COLLAB_SIDE_GAP)).add(normal.uniformScale(COLLAB_FRONT))
+    const mannequin = new CanvasMannequin(this.sceneObject, COLLAB_NAME, COLLAB_COLOR)
+    mannequin.place(new vec3(feet.x, floorY, feet.z), center.sub(feet))
+
+    this.collaborator = {mannequin, canvas, steps, ids: new Map(), next: 0, nextAt: getTime() + COLLAB_FIRST_DELAY}
+    this.refreshBorders()
+    this.dock.setPeople([COLLAB_NAME])
+    this.dock.setStatus(COLLAB_NAME + " se ha unido y está creando un diagrama de flujo")
+    this.log("colaborador " + COLLAB_NAME + " en " + canvas.id)
+  }
+
+  /** Cada cierto tiempo, Ana añade la siguiente pieza de la plantilla y la señala mientras la dibuja. */
+  private updateCollaborator(): void {
+    const col = this.collaborator
+    if (!col) return
+    const eye = this.camera.getWorldPosition()
+    const canvas = col.canvas
+    if (this.canvases.indexOf(canvas) < 0) {
+      // Si se borra su canvas, se va.
+      col.mannequin.destroy()
+      this.collaborator = null
+      this.dock.setPeople([])
+      return
+    }
+    col.mannequin.update(getDeltaTime(), eye)
+    if (col.next >= col.steps.length || getTime() < col.nextAt) return
+    const step = col.steps[col.next++]
+    col.nextAt = getTime() + COLLAB_STEP
+    if (step.kind === "el") {
+      const src = step.data as CanvasElement
+      const {id: _old, ...rest} = src
+      const copy = canvas.doc.add({...rest, parentId: src.parentId ? (col.ids.get(src.parentId) ?? null) : null})
+      col.ids.set(src.id, copy.id)
+      canvas.renderer.growToFit(copy.id)
+      col.mannequin.setTarget(canvas.toWorld(new vec3(copy.x, copy.y, 1)), true)
+    } else {
+      const c = step.data as {from: string; to: string; label: string}
+      const from = col.ids.get(c.from)
+      const to = col.ids.get(c.to)
+      if (from && to) {
+        canvas.doc.connect(from, to, c.label)
+        const a = canvas.doc.elements.get(from)
+        const b = canvas.doc.elements.get(to)
+        if (a && b) col.mannequin.setTarget(canvas.toWorld(new vec3((a.x + b.x) / 2, (a.y + b.y) / 2, 1)), true)
+      }
+    }
+    if (col.next >= col.steps.length) {
+      canvas.busy = false
+      col.nextAt = Infinity
+      // Al terminar, baja el brazo y mira hacia ti.
+      const finish = (): void => col.mannequin.setTarget(null)
+      const ev = this.createEvent("DelayedCallbackEvent")
+      ev.bind(finish)
+      ev.reset(COLLAB_STEP)
+      this.dock.setStatus(COLLAB_NAME + " ha terminado su diagrama de flujo")
+    }
   }
 
   /** Una copia del canvas con todo su contenido, justo a su derecha y con la misma forma, tamaño y orientación. */
@@ -1613,6 +1759,11 @@ export class CanvasApp extends BaseScriptComponent {
       this.startCanvasOutside(interactor)
       return
     }
+    // El canvas de un colaborador no se toca mientras lo está construyendo.
+    if ("canvas" in resolved && resolved.canvas.busy) {
+      this.dock.setStatus((resolved.canvas.owner?.name ?? "Alguien") + " está trabajando en este canvas")
+      return
+    }
     if ("link" in resolved) {
       this.clearSelection()
       this.links.select(resolved.link)
@@ -1762,6 +1913,7 @@ export class CanvasApp extends BaseScriptComponent {
     flushRetired()
     this.updateLinkButtons()
     this.handwriting.update(this.drawing ? this.active : null)
+    this.updateCollaborator()
     this.commitUndoStates()
     this.updateDeleteState()
     this.updateFlip()
@@ -2468,6 +2620,9 @@ export class CanvasApp extends BaseScriptComponent {
         this.quickPlace()
         break
       // De demostración, para el vídeo: avisan como si guardaran, pero no guardan nada.
+      case "invite":
+        this.inviteCollaborator()
+        break
       case "save": {
         const placed = this.canvases.filter((c) => c.placed).length
         this.dock.setStatus(
