@@ -13,6 +13,7 @@ import {appendArrow, CanvasLinks} from "./CanvasLinks"
 import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
 import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
+import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -183,6 +184,7 @@ export class CanvasApp extends BaseScriptComponent {
   private canvases: CanvasInstance[] = []
   private active: CanvasInstance
   private links: CanvasLinks
+  private handwriting: HandwritingAssist
   private linkRubber: MeshSlot
   private placing: Placing | null = null
   private nextCanvasId = 1
@@ -365,6 +367,14 @@ export class CanvasApp extends BaseScriptComponent {
     this.dock.attachToView(camera.getSceneObject())
 
     this.links = new CanvasLinks(this.sceneObject)
+    this.handwriting = new HandwritingAssist(
+      (canvas, ids, text, bounds) => this.convertHandwriting(canvas, ids, text, bounds),
+      (message) => {
+        this.noticeUntil = getTime() + NOTICE_TIME
+        this.dock.setStatus(message, "error")
+      },
+      (message) => this.log(message)
+    )
     this.linkRubber = new MeshSlot(this.sceneObject, "LinkRubber", COLOR.primary)
     this.linkRubber.setVisible(false)
     this.active = this.createCanvas("vertical")
@@ -555,6 +565,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (placing.isNew && placing.previous) {
       const discarded = this.active
       this.canvases = this.canvases.filter((c) => c !== discarded)
+      this.handwriting.forget(discarded)
       this.active = placing.previous
       discarded.destroy()
     } else if (placing.saved) {
@@ -1409,6 +1420,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.press = null
     this.clearSelection()
     this.links.removeFor(canvas)
+    this.handwriting.forget(canvas)
     if (canvas.groupId) {
       const rest = this.canvases.filter((c) => c !== canvas && c.groupId === canvas.groupId)
       if (rest.length === 1) rest[0].groupId = null
@@ -1539,7 +1551,7 @@ export class CanvasApp extends BaseScriptComponent {
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
     const pressRay = this.activeRay(interactor)
-    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir))) return
+    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir) || this.handwriting.hitsRay(pressRay.origin, pressRay.dir))) return
     if (this.dock.closeMenu()) return
 
     const wasEditing = this.editing !== null
@@ -1713,6 +1725,7 @@ export class CanvasApp extends BaseScriptComponent {
   private update(): void {
     flushRetired()
     this.updateLinkButtons()
+    this.handwriting.update(this.drawing ? this.active : null)
     this.commitUndoStates()
     this.updateDeleteState()
     this.updateFlip()
@@ -1996,6 +2009,7 @@ export class CanvasApp extends BaseScriptComponent {
       strokeWidth: STROKE_WIDTHS[this.widthIndex],
       points: [p],
     })
+    this.handwriting.strokeStarted(this.active)
   }
 
   /** Solo se pinta dentro del canvas: al salir se cierra el trazo y al volver empieza otro. */
@@ -2024,7 +2038,32 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     this.doc.update(s.id, this.strokeFrame(s.points))
+    this.handwriting.strokeEnded(this.active, s.id)
     this.log("trazo con " + s.points.length + " puntos")
+  }
+
+  /** Cambia unos trazos escritos a mano por un texto con lo que dicen, en el mismo sitio. */
+  private convertHandwriting(canvas: CanvasInstance, ids: string[], text: string, b: StrokeBounds): void {
+    this.closeEdgeMenu()
+    if (this.editing) this.finishEditing()
+    this.activate(canvas)
+    for (const id of ids) {
+      this.selection.delete(id)
+      this.doc.remove(id)
+    }
+    const value = Array.from(text).slice(0, MAX_TEXT).join("")
+    const chars = Array.from(value).length
+    const w = Math.max(10, Math.min(60, Math.max(b.maxX - b.minX, chars / CHARS_PER_CM + TEXT_BOX_PADDING + 1)))
+    const perLine = Math.max(6, Math.floor((w - TEXT_BOX_PADDING) * CHARS_PER_CM))
+    const lines = Math.max(value.split("\n").length, Math.ceil(chars / perLine))
+    const h = lines * TEXT_LINE_H + TEXT_BOX_PADDING
+    const el = this.doc.add({
+      kind: "text", shape: "rect", x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, w, h,
+      layer: this.activeLayer, text: value, color: 0,
+    })
+    this.growAround(el.id)
+    this.dock.setStatus("Escritura convertida en texto. Deshacer recupera los trazos")
+    this.log("escritura convertida en " + el.id)
   }
 
   /** Expresa un trazo respecto a su centro para que su caja de selección sea correcta. */

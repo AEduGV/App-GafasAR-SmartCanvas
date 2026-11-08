@@ -47,3 +47,6 @@ PluginsUserPreferences/
 .font_tmp/
 .virtual-scene.json
 *.lock
+
+# Extensiones del editor instaladas con paquetes (generador de tokens de RSG): no son parte de la Lens
+Plugins/

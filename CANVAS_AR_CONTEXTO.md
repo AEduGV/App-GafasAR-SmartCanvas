@@ -2,7 +2,7 @@
 
 Este documento se carga solo al abrir Claude Code en esta carpeta, porque `CLAUDE.md` lo importa.
 **Mantenlo al día:** al terminar un cambio, actualiza las secciones de estado, decisiones y límites.
-Última actualización: 2026-11-07.
+Última actualización: 2026-11-08.
 
 ## Objetivo
 
@@ -14,7 +14,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 
 - Se presenta **solo en la Preview de Lens Studio**. No hay gafas para probar.
 - Un solo usuario: la conexión entre dispositivos queda fuera.
-- Guardar versiones y Snap Cloud quedan fuera por ahora.
+- Guardar versiones y Snap Cloud quedan fuera por ahora. Internet sí se da por disponible desde el 2026-11-08, para reconocer la escritura a mano.
 - Plazo: 4 días desde el 2026-11-04. Se acepta no llegar a todo.
 - La identidad visual sigue `indicaciones/design.md`, que Alba Anton revisó el 2026-11-07. `apple-brand-package/` queda solo como referencia, y su `DESIGN.md` está vacío.
 - El usuario se comunica en español: responde y escribe los textos de la interfaz en español.
@@ -50,6 +50,7 @@ Citan documentos que no están en el proyecto: `sources.md`, `decisions.md`, `te
 - **Mover un canvas:** sin otra herramienta activa, arrastrar su interior; un toque sin arrastrar solo deselecciona. Un elemento o una conexión bajo el cursor tienen prioridad: se arrastra el elemento. El contenido viaja con el canvas. Al apuntar a una superficie de otra orientación, gira y se pega a ella con todo su contenido, también en grupo.
 - **Agarrar:** mantener pulsado medio segundo el interior sin mover la mano encoge el canvas, o su grupo, a una miniatura de sí mismo de unos 7 cm (`MINI_SIZE`), de cara al usuario, que sigue al cursor a 75 cm (2026-11-08; antes era una bola). Al soltar, reaparece con su tamaño, centrado en la dirección de la miniatura: pegado a la superficie cercana a la que se apunta (hasta 1,5 m) o, si no hay, flotando de frente a la distancia a la que estaba. Si nunca se alejó de donde empezó (unos 0,8 grados), vuelve exactamente a su sitio y no se engancha a un canvas vecino. Arrastrar en cuanto se pulsa desliza como siempre.
 - **Deshacer (2026-11-08):** botón en la esquina superior izquierda de cada canvas, simétrico al +. Cada canvas guarda hasta 40 estados (contenido, tamaño y forma) al terminar cada acción: al soltar, al dejar de escribir o tras un botón; un arrastre entero se deshace de una vez. No deshace mover el canvas, agruparlo con otro ni las flechas entre canvas.
+- **Escritura a mano a texto (2026-11-08):** al dibujar, tras 1,2 s sin trazar, se juntan el último trazo y los cercanos (a menos de 4 unidades o de una vez su altura) y se envían como imagen PNG en negro sobre blanco a `gpt-4.1-mini` por Remote Service Gateway (`CanvasHandwriting.ts`). Si contienen escritura, aparece debajo un botón «Convertir en texto: …» que sigue a los trazos; al pulsarlo se cambian por un texto en el mismo sitio, hasta 80 caracteres. Deshacer recupera los trazos. Un trazo nuevo oculta el botón y anula la respuesta pendiente. Sin conexión o con los tokens caducados, la línea de estado avisa una vez.
 - **Formas:** Rectángulo, Óvalo, Triángulo y Rombo, en el segundo arco del menú radial. Dibujo, clics y flechas respetan la forma real.
 - **Varios canvas:** flechas entre ellos que siguen a sus canvas.
 - **Botón de agrupar:** cuando dos canvas casi paralelos están a menos de 15 unidades (o se solapan), aparece un botón flotante en el centro del hueco. Una pulsación los agrupa, y al mover uno se mueven juntos; el botón cambia de icono y se pone en cian. Otra pulsación los separa. Si el grupo tiene más canvas, separa todo el grupo. Se oculta con el menú radial de uno de los dos abierto y mientras se lleva uno agarrado. Cada pareja tiene su botón.
@@ -73,10 +74,14 @@ Imágenes, comentarios, captura y alineación con objetos físicos. Nada de esto
 | `CanvasLinks.ts` | Flechas entre canvas: guardan quién enlaza con quién y se recalculan según las poses |
 | `CanvasDockUI.ts`, `CanvasEdgeBarUI.ts`, `CanvasPill.ts` | Interfaz con UIKit: botón, estado y menú pegados a la vista, menú radial de cada canvas (conserva el nombre de cuando era una barra) y botones |
 | `CanvasTemplates.ts`, `CanvasTheme.ts`, `CanvasIcons.ts` | Plantillas, colores e iconos |
+| `CanvasHandwriting.ts` | Escritura a mano a texto: agrupa trazos, los pinta en una imagen, pregunta al modelo y muestra el botón de convertir |
 
 La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su hijo `CanvasDock` lleva `CanvasDockUI`, que al arrancar pasa a ser hijo de la cámara. Los canvas y sus menús radiales se crean en ejecución.
 
 ## Decisiones que no hay que deshacer
+
+- **Remote Service Gateway (2026-11-08):** versión 2.0.1, con sus dependencias Utilities y SnapDecorators 2.0.0, en `Packages/RemoteServiceGateway.lspkg` (sin espacios: sus rutas internas lo exigen). La 4.0.0 no sirve: está hecha para los kits nuevos (`UIKit.lspkg`, `InteractionKit.lspkg`) y además instala Icons y Motion. La escena lleva el objeto `RemoteServiceGatewayCredentials` en la raíz, sin los ejemplos.
+- **Tokens de RSG:** caducan en torno a una hora y van en la escena. **Nunca subirlos:** antes de un commit de `Scene.scene`, dejar los tres campos con su texto `[INSERT ... TOKEN HERE]`, guardar y comprobarlo con `grep`; después, generarlos otra vez. Se generan con `ExecuteEditorCode` (`LensStudio:Network`, `performAuthorizedHttpRequest` a `https://gcp.api.snapchat.com/smart-gate/v2/token/{SNAP,OPENAI,GOOGLE}`) o en Window → Remote Service Gateway Token. `Plugins/` no se sube.
 
 - **Entrada:** se usan los eventos del interactor y la intersección del rayo con el plano, no `InteractableManipulation`.
 - **Detección de superficie:** `WorldQueryModule` con `filter = false` y una consulta nueva por cada clic. Con filtro o con un resultado guardado, un clic en la mesa daba un canvas vertical.
@@ -125,11 +130,11 @@ La escena es `Assets/Scene.scene`: el objeto `CanvasAR` lleva `CanvasApp`, y su 
 - Abierto, el menú tapa una franja estrecha a la izquierda de la vista (11 de las 59 unidades de ancho) y casi toda su altura con Marcar abierta. En gafas no se ha visto: su posición está medida para la franja de la Preview.
 - En Preview, `KeyPressEvent` solo da letras A-Z, números, espacio, retroceso, flechas y modificadores: ni ñ, ni tildes, ni puntuación, ni Enter.
 - Sin probar con el ratón real (todo lo hecho el 2026-11-07 se probó con clics simulados): el menú pegado a la vista, el resaltado por lados al apuntar sin pulsar (en la simulación, un `touch move` también pulsa), el nombre del botón al apuntarlo, y que tras elegir una herramienta del menú radial mover el cursor fuera del canvas no empiece otro, que en la simulación sí ocurre.
-- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; el botón de agrupar con formas no rectangulares, con tres o más canvas, sobre una mesa o entre canvas muy solapados; cerrar el menú radial pulsando fuera; un canvas flotante apuntando a un suelo o una mesa lejanos, o sin ninguna superficie detectada; mover o llenar de contenido un canvas flotante; soltar la miniatura sobre una superficie cercana, agarrar un grupo, un canvas con contenido o con flechas; el menú principal abierto mientras se escribe, o sobre una mesa; la goma en otras capas o sobre una mesa; Deshacer tras cambiar la forma, tras una plantilla o con flechas entre bloques; la goma sobre una pantalla con contenido; arrastrar un canvas hasta una superficie de otra orientación con la escala nueva; cancelar con el segundo clic el primer canvas de la sesión o al «Colocar de nuevo»; las Plantillas del menú radial y añadir una figura desde el arco de Formas; ver las animaciones de los menús a velocidad real (las capturas solo muestran el estado final); duplicar un canvas con flechas entre bloques, agrupado o sobre una mesa; cambiar la forma del canvas desde el menú principal.
+- Sin probar en ningún caso: Escribir sobre una mesa o dentro de una forma no rectangular; plantillas dentro de una forma no rectangular; llevar de mesa a pared un canvas con forma; una flecha entre un canvas con forma y otro bien separado; el botón de agrupar con formas no rectangulares, con tres o más canvas, sobre una mesa o entre canvas muy solapados; cerrar el menú radial pulsando fuera; un canvas flotante apuntando a un suelo o una mesa lejanos, o sin ninguna superficie detectada; mover o llenar de contenido un canvas flotante; soltar la miniatura sobre una superficie cercana, agarrar un grupo, un canvas con contenido o con flechas; el menú principal abierto mientras se escribe, o sobre una mesa; la goma en otras capas o sobre una mesa; Deshacer tras cambiar la forma, tras una plantilla o con flechas entre bloques; la goma sobre una pantalla con contenido; arrastrar un canvas hasta una superficie de otra orientación con la escala nueva; cancelar con el segundo clic el primer canvas de la sesión o al «Colocar de nuevo»; las Plantillas del menú radial y añadir una figura desde el arco de Formas; ver las animaciones de los menús a velocidad real (las capturas solo muestran el estado final); duplicar un canvas con flechas entre bloques, agrupado o sobre una mesa; cambiar la forma del canvas desde el menú principal; la escritura a mano con letra real, palabras, frases, tildes o varias líneas; escribir en una mesa o en una forma no rectangular; mover el canvas con el botón de convertir visible.
 
 ## Cómo probar sin romper nada
 
-**No usar nunca `QueryRuntimeSceneTool`, `PreviewInteractTool` ni `CaptureRuntimeViewTool`.** Instalan paquetes (`AiPreviewAgentInspect`, `Icons`, `Motion`) que no compilan y bloquean el editor con "Invalid transition from Immutable to Mutable". Hubo que cerrar Lens Studio y borrarlos a mano. En `Packages/` solo deben estar SIK y UIKit.
+**No usar nunca `QueryRuntimeSceneTool`, `PreviewInteractTool` ni `CaptureRuntimeViewTool`.** Instalan paquetes (`AiPreviewAgentInspect`, `Icons`, `Motion`) que no compilan y bloquean el editor con "Invalid transition from Immutable to Mutable". Hubo que cerrar Lens Studio y borrarlos a mano. En `Packages/` solo deben estar SIK, UIKit, RemoteServiceGateway, Utilities y SnapDecorators.
 
 Usar `RecompileTypeScriptTool`, `RunAndCollectLogsTool`, `InjectPreviewGesture` y `CapturePanelScreenshotTool`. Buscar en el log `[CanvasAR]` y `Object is null`.
 
@@ -164,6 +169,8 @@ Alba Anton también sube a `main` desde la web de GitHub: haz `git fetch` antes 
 - **Guardar (2026-11-07):** el usuario pidió solo información y que se tenga en cuenta. Propuesta: guardado automático en `global.persistentStorageSystem.store` (`GeneralDataStore`, con tope de tamaño consultable; los trazos son lo que más ocupa) y una biblioteca de hojas para reabrir cada canvas delante del usuario. La posición en la habitación no se conserva sola, porque el origen cambia en cada sesión: o disposición relativa (colocar uno y el resto alrededor), o anclas espaciales solo en gafas (paquete aparte, sin comprobar) o ubicaciones personalizadas (`LocatedAtComponent`; `MappingSession` está obsoleta). Exportar o compartir necesitaría red (Snap Cloud), fuera del alcance.
 
 ## Preguntas abiertas para el usuario
+
+- «Object is null» de SIK (`updateInteractableTargetingData`, en `InteractableScoring.ts`) al borrar con la goma figuras y stickers usando el ratón real (visto en el registro del 2026-11-08, 21:06). `retire()` no basta cuando el cursor real tiene el objeto en su caché de hover. Sin corregir.
 
 - Si el botón de menú y la línea de estado deben ir en otro sitio en gafas, cuya zona visible no se ha medido.
 - Regreso del canvas agarrado a su sitio: el usuario lo vio «en algunos momentos» con el ratón real. Se corrigió la causa encontrada (se comparaba solo la posición final con la inicial), pero no se reprodujo su caso: confirmar si sigue ocurriendo.
