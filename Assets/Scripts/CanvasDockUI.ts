@@ -7,7 +7,7 @@ import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {ICON} from "./CanvasIcons"
 import {LABEL_Z, makePill, paintPill, setPillHintListener, setPillIcon} from "./CanvasPill"
 import {appendFill, appendStroke, outlineFacing, roundedRect} from "./CanvasGeometry"
-import {MeshSlot} from "./CanvasRenderer"
+import {MeshSlot, retire} from "./CanvasRenderer"
 import {COLOR, TONE, withAlpha} from "./CanvasTheme"
 
 const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
@@ -38,6 +38,8 @@ const BTN_H = 2.8
 const HEADER_H = 2.6
 const HEADER_W = 9
 const ICON_W = 5.2
+// Anchura de la columna del menú: solo lleva iconos.
+const COLUMN_W = ICON_W + 0.8
 const GAP = 0.4
 const PAD = 1
 
@@ -63,7 +65,7 @@ const MENU_TOP = TOGGLE_Y - TOGGLE_SIZE / 2 - 0.8
 const MENU_LEFT = -29.5
 
 // Tras estas acciones el menú sigue abierto: llevan a otro botón del menú o piden una segunda pulsación.
-const KEEP_OPEN = new Set(["tab", "width", "color", "layer", "orient", "multi", "delete", "clear"])
+const KEEP_OPEN = new Set(["orient", "save", "exit"])
 
 export type StatusTone = "normal" | "warning" | "error"
 
@@ -74,90 +76,48 @@ interface ButtonDef {
   icon?: Texture
 }
 
-const TOOLS: ButtonDef[] = [
-  {label: "Seleccionar", action: "tool:select", icon: ICON.arrow_selector_tool},
-  {label: "Conectar", action: "tool:connect", icon: ICON.polyline},
-  {label: "Dibujar", action: "tool:draw", icon: ICON.draw},
-  {label: "Goma", action: "tool:erase", icon: ICON.ink_eraser},
-  {label: "Subrayar", action: "tool:underline", icon: ICON.format_underlined},
-  {label: "Varios", action: "multi", icon: ICON.library_add_check},
+// El menú solo tiene estos iconos (2026-11-08). Guardar y Salir son de demostración: no guardan ni cierran.
+const MAIN: ButtonDef[] = [
+  {label: "Cuenta", action: "info:account", icon: ICON.account_circle},
+  {label: "Colaboración", action: "info:collab", icon: ICON.groups},
+  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.save},
+  {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
+  {label: "Tutoriales", action: "info:tutorials", icon: ICON.school},
+  {label: "Salir", action: "exit", icon: ICON.logout},
 ]
 
-const TABS: ButtonDef[] = [
-  {label: "Crear", action: "tab:crear", w: 7, icon: ICON.add_box},
-  {label: "Flujo", action: "tab:flujo", w: 7, icon: ICON.account_tree},
-  {label: "Lógica", action: "tab:logica", w: 7, icon: ICON.memory},
-  {label: "Marcar", action: "tab:marcar", w: 7, icon: ICON.brush},
-  {label: "Stickers", action: "tab:stickers", w: 7, icon: ICON.kid_star},
-  {label: "Plantillas", action: "tab:plantillas", w: 7, icon: ICON.dashboard},
-  {label: "Canvas", action: "tab:canvas", w: 7, icon: ICON.crop_free},
-]
-
-const PANES: Record<string, ButtonDef[]> = {
-  crear: [
-    {label: "Nota", action: "add:note", icon: ICON.sticky_note_2},
-    {label: "Texto", action: "add:text", icon: ICON.title},
-    {label: "Pantalla", action: "add:screen", icon: ICON.web_asset},
-    {label: "Rectángulo", action: "shape:rect", icon: ICON.rectangle},
-    {label: "Círculo", action: "shape:circle", icon: ICON.circle},
-    {label: "Triángulo", action: "shape:triangle", icon: ICON.change_history},
-  ],
-  flujo: [
-    {label: "Proceso", action: "shape:process", icon: ICON.square},
-    {label: "Decisión", action: "shape:decision", icon: ICON.diamond},
-    {label: "Inicio / fin", action: "shape:terminator", icon: ICON.stadium},
-    {label: "Datos", action: "shape:data", icon: ICON.database},
-  ],
-  // Las puertas lógicas y los nombres de color no tienen un icono que los distinga: siguen en texto.
-  logica: [
-    {label: "AND", action: "shape:and"},
-    {label: "OR", action: "shape:or"},
-    {label: "NOT", action: "shape:not"},
-    {label: "XOR", action: "shape:xor"},
-  ],
-  marcar: [
-    {label: "Fino", action: "width:0", w: 5.5, icon: ICON.pen_size_1},
-    {label: "Medio", action: "width:1", w: 5.5, icon: ICON.pen_size_3},
-    {label: "Grueso", action: "width:2", w: 5.5, icon: ICON.pen_size_5},
-    {label: "Blanco", action: "color:0", w: 6},
-    {label: "Azul", action: "color:1", w: 5},
-    {label: "Verde", action: "color:2", w: 5.5},
-    {label: "Amarillo", action: "color:3", w: 7.5},
-    {label: "Naranja", action: "color:4", w: 7},
-    {label: "Rojo", action: "color:5", w: 5},
-  ],
-  stickers: [
-    {label: "Estrella", action: "sticker:star", icon: ICON.star},
-    {label: "Corazón", action: "sticker:heart", icon: ICON.favorite},
-    {label: "Aviso", action: "sticker:warning", icon: ICON.warning},
-    {label: "Hecho", action: "sticker:done", icon: ICON.check_circle},
-  ],
-  plantillas: [
-    {label: "Flujo", action: "template:flow", icon: ICON.account_tree},
-    {label: "Card sorting", action: "template:cards", icon: ICON.view_kanban},
-    {label: "User journey", action: "template:journey", icon: ICON.route},
-    {label: "Arquitectura", action: "template:architecture", icon: ICON.hub},
-    {label: "Secuencia", action: "template:sequence", icon: ICON.format_list_numbered},
-  ],
-  canvas: [
-    {label: "Horizontal / vertical", action: "flip", icon: ICON.screen_rotation},
-    {label: "Colocar de nuevo", action: "replace", icon: ICON.place_item},
-    {label: "Vaciar", action: "clear", icon: ICON.delete_sweep},
-    {label: "Canvas rectangular", action: "canvasShape:rect", icon: ICON.rectangle},
-    {label: "Canvas ovalado", action: "canvasShape:oval", icon: ICON.circle},
-    {label: "Canvas triangular", action: "canvasShape:triangle", icon: ICON.change_history},
-    {label: "Canvas en rombo", action: "canvasShape:diamond", icon: ICON.diamond},
-  ],
+// Paneles de ejemplo que se abren a la derecha del menú: un título, unas líneas y botones que aún no hacen nada.
+interface InfoPanel {
+  title: string
+  lines: string[]
+  buttons: string[]
 }
 
-const SELECTION: ButtonDef[] = [
-  {label: "Editar", action: "edit", icon: ICON.edit},
-  {label: "Capa −", action: "layer:-1", icon: ICON.flip_to_back},
-  {label: "Capa +", action: "layer:1", icon: ICON.flip_to_front},
-  {label: "Agrupar", action: "group", icon: ICON.join},
-  {label: "Separar", action: "ungroup", icon: ICON.ungroup},
-  {label: "Borrar", action: "delete", icon: ICON.delete},
-]
+const PANELS: Record<string, InfoPanel> = {
+  account: {
+    title: "Cuenta",
+    lines: ["Usuario de ejemplo", "ejemplo@canvasar.app", "Para trabajar en equipo"],
+    buttons: ["Iniciar sesión", "Ajustes de la cuenta", "Cerrar sesión"],
+  },
+  collab: {
+    title: "Colaboración",
+    lines: ["En este espacio: solo tú", "Edita con otras personas", "en tiempo real"],
+    buttons: ["Invitar a alguien", "Compartir este canvas", "Permisos de edición"],
+  },
+  tutorials: {
+    title: "Tutoriales",
+    lines: ["Aprende paso a paso"],
+    buttons: ["Crear un canvas", "Dibujar y escribir", "El menú radial", "Mover y agrupar canvas", "De escritura a texto"],
+  },
+}
+
+const PANEL_W = 19
+const PANEL_GAP = 1
+const PANEL_BTN_H = 2.6
+const PANEL_LINE_H = 2.2
+const PANEL_TITLE_H = 3
+const PANEL_TITLE_SIZE = 52
+const PANEL_TEXT_SIZE = 38
 
 const PLACEMENT: ButtonDef[] = [
   {label: "Horizontal", action: "orient:h", icon: ICON.crop_landscape},
@@ -191,6 +151,12 @@ export class CanvasDockUI extends BaseScriptComponent {
   private appearing: SceneObject | null = null
   private buttons = new Map<string, CapsuleButton>()
   private placementColumn: SceneObject | null = null
+  private mainColumn: SceneObject | null = null
+  private panel: SceneObject | null = null
+  private panelPlate: MeshSlot | null = null
+  private panelBody: SceneObject | null = null
+  private openPanel: string | null = null
+  private panelSize = new vec2(PANEL_W, 10)
   private ready = false
   private pendingStatus = ""
   private pendingTone: StatusTone = "normal"
@@ -244,6 +210,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.setActive("menu", open)
     // Un botón que desaparece bajo el cursor no avisa de que ya no se le apunta.
     if (!open) this.showHint(null)
+    if (!open) this.togglePanel(null)
   }
 
   private makeToggle(): void {
@@ -330,13 +297,9 @@ export class CanvasDockUI extends BaseScriptComponent {
     content.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
     this.content = content
 
-    this.addSection(content, "tools", "Herramientas", TOOLS)
-    for (const tab of TABS) {
-      const key = tab.action.split(":")[1]
-      this.addSection(content, key, tab.label, PANES[key])
-    }
-    this.addSection(content, "selection", "Selección", SELECTION)
+    this.mainColumn = this.makeColumn(content, MAIN)
     this.placementColumn = this.makeColumn(content, PLACEMENT)
+    this.buildPanel()
 
     this.ready = true
     this.setPhase(this.pendingPhase)
@@ -357,6 +320,75 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.expanded = key
     for (const sec of this.sections) this.setActive("section:" + sec.key, sec.key === key)
     if (this.ready) this.layoutColumns()
+  }
+
+  private buildPanel(): void {
+    const panel = global.scene.createSceneObject("InfoPanel")
+    panel.setParent(this.sceneObject)
+    this.panel = panel
+    // Casi opaco, como la línea de estado: el texto del panel se lee aunque detrás haya un canvas.
+    this.panelPlate = new MeshSlot(panel, "PanelGlass", withAlpha(COLOR.surface, PLATE_ALPHA), false)
+    panel.enabled = false
+  }
+
+  /** Abre el panel de ejemplo de esa opción, o lo cierra si ya estaba abierto (null cierra cualquiera). */
+  private togglePanel(key: string | null): void {
+    const next = key !== null && key !== this.openPanel ? key : null
+    if (this.openPanel) this.setActive("info:" + this.openPanel, false)
+    this.openPanel = next
+    if (!this.panel) return
+    if (this.panelBody) {
+      retire(this.panelBody)
+      this.panelBody = null
+    }
+    if (!next) {
+      this.panel.enabled = false
+      return
+    }
+    this.setActive("info:" + next, true)
+    const def = PANELS[next]
+    const body = global.scene.createSceneObject("Body")
+    body.setParent(this.panel)
+    body.getTransform().setLocalPosition(new vec3(0, 0, 0.6))
+    this.panelBody = body
+    const inner = PANEL_W - PAD * 2
+    let y = -PAD
+    const text = (value: string, size: number, h: number, color: vec4): void => {
+      const so = global.scene.createSceneObject("Line")
+      so.setParent(body)
+      so.getTransform().setLocalPosition(new vec3(PAD, y - h / 2, LABEL_Z))
+      const t = so.createComponent("Component.Text") as Text
+      t.font = THEME_FONT
+      t.size = size
+      t.depthTest = true
+      t.textFill.color = color
+      t.horizontalAlignment = HorizontalAlignment.Left
+      t.verticalAlignment = VerticalAlignment.Center
+      t.horizontalOverflow = HorizontalOverflow.Shrink
+      t.layoutRect = Rect.create(0, inner, -h / 2, h / 2)
+      t.text = value
+      y -= h
+    }
+    text(def.title, PANEL_TITLE_SIZE, PANEL_TITLE_H, COLOR.text)
+    for (const line of def.lines) text(line, PANEL_TEXT_SIZE, PANEL_LINE_H, COLOR.textMuted)
+    y -= GAP * 2
+    for (const label of def.buttons) {
+      const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => false, () =>
+        this.setStatus("«" + label + "» es de ejemplo: todavía no está disponible")
+      )
+      btn.getSceneObject().getTransform().setLocalPosition(new vec3(PAD + inner / 2, y - PANEL_BTN_H / 2, 0))
+      y -= PANEL_BTN_H + GAP
+    }
+    this.panelSize = new vec2(PANEL_W, -y + PAD - GAP)
+    const size = this.panelSize
+    const pts = roundedRect(size.x, size.y, PLATE_RADIUS).map((p) => p.add(new vec2(size.x / 2, -size.y / 2)))
+    if (this.panelPlate) {
+      appendFill(this.panelPlate.begin(), pts, 0.2)
+      this.panelPlate.commit()
+    }
+    // A la derecha del menú, con su borde superior alineado.
+    this.panel.getTransform().setLocalPosition(new vec3(MENU_LEFT + this.plateSize.x + PANEL_GAP, MENU_TOP, 0))
+    this.panel.enabled = true
   }
 
   private buttonWidth(def: ButtonDef): number {
@@ -405,7 +437,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     const col = global.scene.createSceneObject("Column")
     col.setParent(parent)
     const flex = col.createComponent(FlexLayout.getTypeName()) as FlexLayout
-    flex.width = HEADER_W
+    flex.width = COLUMN_W
     flex.height = this.columnHeight(defs.length)
     flex.direction = FlexDirection.Column
     flex.justifyContent = FlexJustify.Start
@@ -420,8 +452,13 @@ export class CanvasDockUI extends BaseScriptComponent {
         BUTTON_SIZE,
         () => this.activeActions.has(def.action),
         () => {
+          const [verb, arg] = def.action.split(":")
+          if (verb === "info") {
+            this.togglePanel(arg)
+            return
+          }
           this._onAction.invoke(def.action)
-          if (!KEEP_OPEN.has(def.action.split(":")[0])) this.setOpen(false)
+          if (!KEEP_OPEN.has(verb)) this.setOpen(false)
         },
         def.icon
       )
@@ -441,7 +478,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     const e = 1 - Math.pow(1 - k, 3)
     for (const s of this.slide) s.so.getTransform().setLocalPosition(new vec3(s.x, s.from + (s.to - s.from) * e, 0))
     // Solo el alto cambia: el ancho de la barra es siempre el mismo.
-    this.setPlateSize(new vec2(HEADER_W + PAD * 2, this.slideFrom + (this.slideTo - this.slideFrom) * e))
+    this.setPlateSize(new vec2(COLUMN_W + PAD * 2, this.slideFrom + (this.slideTo - this.slideFrom) * e))
     const col = this.appearing
     if (!col) return
     const n = col.getChildrenCount()
@@ -457,7 +494,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   /** Apila de arriba abajo las cabeceras y, bajo la abierta, sus botones; el vidrio se ajusta al total. */
   private layoutColumns(): void {
     const working = this.pendingPhase === "work"
-    const x = PAD + HEADER_W / 2
+    const x = PAD + COLUMN_W / 2
     let y = -PAD
     const before = new Map(this.slide.map((s) => [s.so, s.so.getTransform().getLocalPosition().y]))
     const wasEnabled = new Map(this.sections.map((sec) => [sec.items, sec.items.enabled]))
@@ -480,6 +517,10 @@ export class CanvasDockUI extends BaseScriptComponent {
         sec.header.enabled = false
         sec.items.enabled = false
       }
+    }
+    if (this.mainColumn) {
+      this.mainColumn.enabled = working
+      if (working) place(this.mainColumn, this.columnHeight(MAIN.length))
     }
     if (this.placementColumn) {
       this.placementColumn.enabled = !working
@@ -561,6 +602,9 @@ export class CanvasDockUI extends BaseScriptComponent {
     if (this.pendingStatus && x > STATUS_LEFT && x < STATUS_LEFT + STATUS_MAX_W && Math.abs(y - TOGGLE_Y) < STATUS_H / 2) return true
     if (!this.opened) return false
     const size = this.plateSize
-    return x > MENU_LEFT && x < MENU_LEFT + size.x && y < MENU_TOP && y > MENU_TOP - size.y
+    if (x > MENU_LEFT && x < MENU_LEFT + size.x && y < MENU_TOP && y > MENU_TOP - size.y) return true
+    if (!this.openPanel) return false
+    const left = MENU_LEFT + size.x + PANEL_GAP
+    return x > left && x < left + this.panelSize.x && y < MENU_TOP && y > MENU_TOP - this.panelSize.y
   }
 }

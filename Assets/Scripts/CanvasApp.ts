@@ -2467,6 +2467,20 @@ export class CanvasApp extends BaseScriptComponent {
       case "quick":
         this.quickPlace()
         break
+      // De demostración, para el vídeo: avisan como si guardaran, pero no guardan nada.
+      case "save": {
+        const placed = this.canvases.filter((c) => c.placed).length
+        this.dock.setStatus(
+          arg === "all"
+            ? placed === 1 ? "Canvas guardado" : "Guardados los " + placed + " canvas"
+            : "Canvas seleccionado guardado"
+        )
+        break
+      }
+      // Una Lens no puede cerrarse sola: solo informa.
+      case "exit":
+        this.dock.setStatus("Para salir, usa el gesto del sistema de las gafas")
+        break
       case "tool":
         this.setTool(arg as Tool)
         break

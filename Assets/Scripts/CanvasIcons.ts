@@ -1,6 +1,7 @@
 // Iconos de Material Symbols (estilo Rounded, grosor 600) de github.com/google/material-design-icons.
 // Licencia Apache 2.0: ver THIRD_PARTY_NOTICES.md. Blancos en el PNG: se tiñen con baseColor.
 export const ICON = {
+  account_circle: requireAsset("../Icons/account_circle_128x128.png") as Texture,
   account_tree: requireAsset("../Icons/account_tree_128x128.png") as Texture,
   add: requireAsset("../Icons/add_128x128.png") as Texture,
   add_box: requireAsset("../Icons/add_box_128x128.png") as Texture,
@@ -29,11 +30,13 @@ export const ICON = {
   flip_to_front: requireAsset("../Icons/flip_to_front_128x128.png") as Texture,
   format_list_numbered: requireAsset("../Icons/format_list_numbered_128x128.png") as Texture,
   format_underlined: requireAsset("../Icons/format_underlined_128x128.png") as Texture,
+  groups: requireAsset("../Icons/groups_128x128.png") as Texture,
   hub: requireAsset("../Icons/hub_128x128.png") as Texture,
   ink_eraser: requireAsset("../Icons/ink_eraser_128x128.png") as Texture,
   join: requireAsset("../Icons/join_128x128.png") as Texture,
   kid_star: requireAsset("../Icons/kid_star_128x128.png") as Texture,
   library_add_check: requireAsset("../Icons/library_add_check_128x128.png") as Texture,
+  logout: requireAsset("../Icons/logout_128x128.png") as Texture,
   memory: requireAsset("../Icons/memory_128x128.png") as Texture,
   menu: requireAsset("../Icons/menu_128x128.png") as Texture,
   pen_size_1: requireAsset("../Icons/pen_size_1_128x128.png") as Texture,
@@ -43,6 +46,9 @@ export const ICON = {
   polyline: requireAsset("../Icons/polyline_128x128.png") as Texture,
   rectangle: requireAsset("../Icons/rectangle_128x128.png") as Texture,
   route: requireAsset("../Icons/route_128x128.png") as Texture,
+  save: requireAsset("../Icons/save_128x128.png") as Texture,
+  save_as: requireAsset("../Icons/save_as_128x128.png") as Texture,
+  school: requireAsset("../Icons/school_128x128.png") as Texture,
   screen_rotation: requireAsset("../Icons/screen_rotation_128x128.png") as Texture,
   square: requireAsset("../Icons/square_128x128.png") as Texture,
   stadium: requireAsset("../Icons/stadium_128x128.png") as Texture,
