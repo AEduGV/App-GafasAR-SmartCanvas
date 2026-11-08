@@ -23,6 +23,7 @@ export interface CanvasElement {
   points: vec2[]           // trazos: puntos relativos a (x, y)
   strokeWidth: number
   textScale: number        // tamaño de letra respecto al normal (1); la escritura convertida puede llegar a 3
+  tint: number[] | null    // color libre de un trazo (RGB de 0 a 1), elegido en la rueda; si no, el de la paleta
 }
 
 export interface CanvasConnection {
@@ -62,7 +63,7 @@ export class CanvasDocument {
     const el: CanvasElement = {
       id: this.newId(init.kind),
       shape: "rect", x: 0, y: 0, w: 14, h: 9, layer: 0,
-      text: "", color: 0, groupId: null, parentId: null, points: [], strokeWidth: 0.5, textScale: 1,
+      text: "", color: 0, groupId: null, parentId: null, points: [], strokeWidth: 0.5, textScale: 1, tint: null,
       ...init,
     }
     this.elements.set(el.id, el)

@@ -3,8 +3,10 @@
 import {CapsuleButton} from "SpectaclesUIKit.lspkg/Scripts/Components/Button/CapsuleButton"
 import Event, {PublicApi} from "SpectaclesInteractionKit.lspkg/Utils/Event"
 import {ICON} from "./CanvasIcons"
-import {addPillEdge, makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
-import {TONE} from "./CanvasTheme"
+import {appendFill, roundedRect} from "./CanvasGeometry"
+import {addPillEdge, LABEL_Z, makePill, paintPill, setPillIcon, setPillIconRotation} from "./CanvasPill"
+import {MeshSlot} from "./CanvasRenderer"
+import {PALETTE, TONE} from "./CanvasTheme"
 
 const HUB_SIZE = 4.6
 const ITEM_SIZE = 4.2
@@ -26,7 +28,42 @@ const SUB_STAGGER = 0.08
 
 export type EdgeTool = "draw" | "erase" | "write" | "arrow"
 export type EdgeSubmenu = "shapes" | "stickers" | "templates"
-export type EdgeAction = EdgeTool | EdgeSubmenu | "duplicate" | "delete" | "menu"
+export type EdgeAction = EdgeTool | EdgeSubmenu | "duplicate" | "delete" | "menu" | "palette"
+
+// Con Dibujar activo, un círculo del color del trazo junto al +; al pulsarlo se abre a su alrededor
+// una rueda de muestras: tonos vivos fuera y claros dentro. Sin negro, que no se vería en las gafas.
+const SWATCH_SIZE = 2.6
+const WHEEL_OUTER = 7
+const WHEEL_INNER = 3.9
+const WHEEL_TIME = 0.3
+const WHEEL_STAGGER = 0.025
+// El círculo de color queda a la izquierda del +, hacia el interior del canvas.
+export const PALETTE_OFFSET = new vec2(-(HUB_SIZE + 1.2), 0)
+export const WHEEL_REACH = WHEEL_OUTER + SWATCH_SIZE / 2
+
+function hsv(h: number, s: number, v: number): vec4 {
+  const f = (n: number): number => {
+    const k = (n + h / 60) % 6
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1))
+  }
+  return new vec4(f(5), f(3), f(1), 1)
+}
+
+const OUTER_COLORS: vec4[] = Array.from({length: 12}, (_, i) => hsv(i * 30, 0.85, 1))
+const INNER_COLORS: vec4[] = [
+  PALETTE[0].stroke,
+  new vec4(0.62, 0.66, 0.72, 1),
+  hsv(350, 0.35, 1),
+  hsv(25, 0.4, 1),
+  hsv(55, 0.4, 1),
+  hsv(140, 0.35, 0.95),
+  hsv(205, 0.4, 1),
+  hsv(270, 0.35, 1),
+]
+
+function discPoints(radius: number): vec2[] {
+  return roundedRect(radius * 2, radius * 2, radius)
+}
 
 interface ItemDef {
   action: EdgeAction
@@ -119,6 +156,14 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   private subProgress = new Map<EdgeSubmenu, number>()
   private opened = false
   private progress = 0
+  private _onColor = new Event<vec4>()
+  private paletteRoot: SceneObject | null = null
+  private paletteDisc: MeshSlot | null = null
+  private paletteButton: CapsuleButton | null = null
+  private wheel: SceneObject | null = null
+  private swatches: {so: SceneObject; angle: number; radius: number}[] = []
+  private wheelOpen = false
+  private wheelProgress = 0
 
   get onAction(): PublicApi<EdgeAction> {
     return this._onAction.publicApi()
@@ -135,6 +180,22 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
 
   get hasSubmenuOpen(): boolean {
     return this.openSub !== null
+  }
+
+  /** El color elegido en la rueda. */
+  get onColor(): PublicApi<vec4> {
+    return this._onColor.publicApi()
+  }
+
+  get isWheelOpen(): boolean {
+    return this.wheelOpen
+  }
+
+  /** Si un punto (relativo al +) cae en el círculo de color o, abierta, en su rueda. */
+  paletteContains(p: vec2): boolean {
+    if (!this.paletteRoot || !this.paletteRoot.enabled) return false
+    const d = p.distance(PALETTE_OFFSET)
+    return d <= (this.wheelOpen ? WHEEL_REACH : HUB_SIZE / 2)
   }
 
   onAwake(): void {
@@ -162,9 +223,80 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
     addPillEdge(this.hub)
 
+    this.buildPalette()
+
     this.layout()
     this.ring.enabled = false
     this.createEvent("UpdateEvent").bind(() => this.animate())
+  }
+
+  private buildPalette(): void {
+    const root = global.scene.createSceneObject("Palette")
+    root.setParent(this.sceneObject)
+    root.getTransform().setLocalPosition(new vec3(PALETTE_OFFSET.x, PALETTE_OFFSET.y, 0))
+    this.paletteRoot = root
+    const btn = makePill(root, "", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.wheelOpen, () => this._onAction.invoke("palette"))
+    addPillEdge(btn)
+    this.paletteButton = btn
+    this.paletteDisc = new MeshSlot(btn.getSceneObject(), "Color", PALETTE[0].stroke, false)
+    const disc = this.paletteDisc.begin()
+    appendFill(disc, discPoints(HUB_SIZE * 0.3), LABEL_Z)
+    this.paletteDisc.commit()
+
+    const wheel = global.scene.createSceneObject("Wheel")
+    wheel.setParent(root)
+    this.wheel = wheel
+    const add = (color: vec4, angle: number, radius: number): void => {
+      const sw = makePill(wheel, "", SWATCH_SIZE, SWATCH_SIZE, TEXT_SIZE, () => false, () => this.pickColor(color))
+      const dot = new MeshSlot(sw.getSceneObject(), "Swatch", color, false)
+      appendFill(dot.begin(), discPoints(SWATCH_SIZE * 0.36), LABEL_Z)
+      dot.commit()
+      this.swatches.push({so: sw.getSceneObject(), angle, radius})
+    }
+    OUTER_COLORS.forEach((c, i) => add(c, 90 + i * (360 / OUTER_COLORS.length), WHEEL_OUTER))
+    INNER_COLORS.forEach((c, i) => add(c, 90 + i * (360 / INNER_COLORS.length), WHEEL_INNER))
+    wheel.enabled = false
+    root.enabled = false
+    this.applyWheel()
+  }
+
+  private pickColor(color: vec4): void {
+    this.setDrawColor(color)
+    this.setWheel(false)
+    this._onColor.invoke(color)
+  }
+
+  /** El círculo muestra el color con el que se dibuja. */
+  setDrawColor(color: vec4): void {
+    this.paletteDisc?.setColor(color)
+  }
+
+  setWheel(open: boolean): void {
+    if (open === this.wheelOpen) return
+    this.wheelOpen = open
+    if (open && this.wheel) this.wheel.enabled = true
+    if (this.paletteButton) paintPill(this.paletteButton, open)
+    // La rueda pasa por donde está el +: mientras se elige color, se aparta.
+    if (this.hub) this.hub.getSceneObject().enabled = !open
+  }
+
+  private refreshPalette(): void {
+    const visible = this.active === "draw" && !this.opened
+    if (!visible) this.setWheel(false)
+    if (this.paletteRoot) this.paletteRoot.enabled = visible
+  }
+
+  /** Cada muestra sale del círculo de color hacia su sitio, una tras otra. */
+  private applyWheel(): void {
+    const n = this.swatches.length
+    this.swatches.forEach((sw, i) => {
+      const k = staggered(this.wheelProgress, i, n, WHEEL_STAGGER)
+      const reach = easeOutBack(k)
+      const scale = Math.max(easeOutCubic(k), 0.01)
+      const t = sw.so.getTransform()
+      t.setLocalPosition(polar(sw.angle - SWIRL * (1 - easeOutCubic(k)), sw.radius * reach))
+      t.setLocalScale(new vec3(scale, scale, scale))
+    })
   }
 
   private makeItem(parent: SceneObject, label: string, icon: Texture, isActive: () => boolean, onPress: () => void): CapsuleButton {
@@ -231,6 +363,12 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       this.applyProgress()
       if (this.progress === 0 && this.ring) this.ring.enabled = false
     }
+    const wheelGoal = this.wheelOpen ? 1 : 0
+    if (this.wheelProgress !== wheelGoal) {
+      this.wheelProgress = this.step(this.wheelProgress, wheelGoal, WHEEL_TIME)
+      this.applyWheel()
+      if (this.wheelProgress === 0 && this.wheel) this.wheel.enabled = false
+    }
     this.subProgress.forEach((p, key) => {
       const goal = this.openSub === key ? 1 : 0
       if (p === goal) return
@@ -260,6 +398,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     if (open && this.ring) this.ring.enabled = true
     if (!open) this.closeSubmenus()
     this.refreshHub()
+    this.refreshPalette()
   }
 
   /** Con el menú cerrado, el botón + muestra la herramienta activa. */
@@ -270,6 +409,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       if (btn) paintPill(btn, def.action === action)
     }
     this.refreshHub()
+    this.refreshPalette()
   }
 
   /** Color de aviso mientras espera la segunda pulsación que confirma el borrado. */

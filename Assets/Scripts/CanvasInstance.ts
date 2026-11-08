@@ -94,7 +94,8 @@ export class CanvasInstance {
   onEdgeBar(p: vec2): boolean {
     if (!this.bar) return false
     const reach = !this.bar.isOpen ? 0 : this.bar.hasSubmenuOpen ? SHAPE_RING_RADIUS : RING_RADIUS
-    return p.distance(this.hubPoint) <= reach + HUB_REACH
+    const hub = this.hubPoint
+    return p.distance(hub) <= reach + HUB_REACH || this.bar.paletteContains(p.sub(hub))
   }
 
   /** Solo se tiene en cuenta si ya está colocado y visible. */

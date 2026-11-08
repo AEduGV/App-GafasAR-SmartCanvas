@@ -183,7 +183,8 @@ class ElementView {
     const ob = this.outline.begin()
 
     if (el.kind === "stroke") {
-      this.fill.setColor(palette.stroke)
+      const t = el.tint
+      this.fill.setColor(t && t.length >= 3 ? new vec4(t[0], t[1], t[2], 1) : palette.stroke)
       appendStroke(fb, el.points, false, el.strokeWidth, 0)
       appendStroke(ob, el.points, false, el.strokeWidth + 0.35, -0.02)
       this.text.enabled = false

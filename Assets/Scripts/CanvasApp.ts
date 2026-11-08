@@ -214,6 +214,8 @@ export class CanvasApp extends BaseScriptComponent {
   private lastTap = {id: "", time: -10}
   private clearArmedUntil = -1
   private drawing: CanvasElement | null = null
+  // Color libre elegido en la rueda; si es null, se dibuja con el de la paleta.
+  private drawTint: vec4 | null = null
 
   // Colocación
   private corner: vec3 | null = null
@@ -785,6 +787,8 @@ export class CanvasApp extends BaseScriptComponent {
       this.onAction(action)
     })
     canvas.bar = bar
+    bar.onColor.add((color) => this.setDrawTint(color))
+    bar.setDrawColor(this.currentDrawColor())
     const holder = global.scene.createSceneObject("UndoButton")
     holder.setParent(canvas.root)
     holder.createComponent("Component.Canvas")
@@ -805,6 +809,13 @@ export class CanvasApp extends BaseScriptComponent {
     if (this.editing) this.finishEditing()
     this.activate(canvas)
     this.log("borde " + canvas.id + " " + action)
+    if (action === "palette") {
+      const open = !canvas.bar?.isWheelOpen
+      this.closeEdgeMenu()
+      canvas.bar?.setWheel(open)
+      this.dock.setStatus(open ? "Elige un color para dibujar" : this.toolHint())
+      return
+    }
     if (action === "menu") {
       this.closeEdgeMenu()
       if (!wasOpen) {
@@ -850,8 +861,18 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Devuelve si había un menú abierto. */
   private closeEdgeMenu(): boolean {
+    let wheel = false
+    for (const c of this.canvases) {
+      if (c.bar?.isWheelOpen) {
+        c.bar.setWheel(false)
+        wheel = true
+      }
+    }
     const canvas = this.menuCanvas
-    if (!canvas) return false
+    if (!canvas) {
+      if (wheel) this.dock.setStatus(this.toolHint())
+      return wheel
+    }
     this.menuCanvas = null
     canvas.bar?.closeSubmenus()
     canvas.bar?.setOpen(false)
@@ -2009,6 +2030,7 @@ export class CanvasApp extends BaseScriptComponent {
       h: 2,
       layer: this.activeLayer,
       color: this.color >= 0 ? this.color : 0,
+      tint: this.drawTint ? [this.drawTint.x, this.drawTint.y, this.drawTint.z] : null,
       strokeWidth: STROKE_WIDTHS[this.widthIndex],
       points: [p],
     })
@@ -2196,6 +2218,7 @@ export class CanvasApp extends BaseScriptComponent {
         kind: "stroke",
         layer: s.layer,
         color: s.color,
+        tint: s.tint,
         strokeWidth: s.strokeWidth,
         parentId: s.parentId,
         groupId: s.groupId,
@@ -2491,8 +2514,22 @@ export class CanvasApp extends BaseScriptComponent {
     }
   }
 
+  /** El color con el que se dibuja ahora: el de la rueda o, si no hay, el de la paleta. */
+  private currentDrawColor(): vec4 {
+    return this.drawTint ?? PALETTE[this.color >= 0 ? this.color : 0].stroke
+  }
+
+  private setDrawTint(color: vec4): void {
+    this.drawTint = color
+    for (const c of this.canvases) c.bar?.setDrawColor(color)
+    this.dock.setStatus("Color elegido: dibuja sobre el canvas")
+    this.log("color de dibujo " + [color.x, color.y, color.z].map((v) => v.toFixed(2)).join(","))
+  }
+
   private setColor(index: number): void {
     this.color = index
+    this.drawTint = null
+    for (const c of this.canvases) c.bar?.setDrawColor(this.currentDrawColor())
     for (let i = 0; i < PALETTE.length; i++) this.dock.setActive("color:" + i, i === index)
     this.selection.forEach((id) => this.doc.update(id, {color: index}))
   }
