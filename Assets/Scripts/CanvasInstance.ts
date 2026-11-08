@@ -8,7 +8,8 @@ export type Orientation = "horizontal" | "vertical"
 
 // El botón + queda justo dentro de la esquina: por fuera lo cortaría la franja visible de la Preview en un
 // canvas normal. La esquina sigue pudiendo agarrarse para cambiar el tamaño por su franja exterior.
-const HUB_INSET = 3.2
+// En diagonal: deja una unidad de aire entre el + (4,6 de diámetro) y cada borde; Deshacer usa la misma.
+const HUB_INSET = 4.7
 const HUB_REACH = 3.5
 
 export class CanvasInstance {
