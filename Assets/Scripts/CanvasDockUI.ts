@@ -50,7 +50,8 @@ const STATUS_SIZE = 41
 
 // Lo más cerca posible sin molestar, para que ningún canvas se interponga. Las medidas de este archivo
 // son las de un panel a VIEW_REFERENCE cm, y se escalan para verse igual de grandes a esta distancia.
-const VIEW_DISTANCE = 50
+// Más cerca que los canvas flotantes (50 cm), para que ninguno lo atraviese.
+const VIEW_DISTANCE = 30
 const VIEW_REFERENCE = 105
 // Esquina superior izquierda de la franja donde la Preview muestra lo virtual, en esas medidas.
 const TOGGLE_SIZE = ROUND

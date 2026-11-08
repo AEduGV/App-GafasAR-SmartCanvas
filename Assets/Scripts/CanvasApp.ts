@@ -94,8 +94,11 @@ const CORNER_QUERY_TIMEOUT = 0.5
 const REFERENCE_DISTANCE = 135
 // Una superficie más lejana no recibe el canvas: se crea en el aire, a la longitud de un brazo.
 const FAR_SURFACE_DISTANCE = 150
-const FLOATING_DISTANCE = 75
-const MIN_SCALE = 0.6
+const FLOATING_DISTANCE = 50
+// A 50 cm, un canvas flotante usa este mínimo: se ve del mismo tamaño que antes a 75 cm con 0,6.
+const MIN_SCALE = 0.4
+// Los botones de un canvas (+, Deshacer, color) solo se ven en el seleccionado y a esta distancia o menos (cm).
+const BUTTONS_MAX_DISTANCE = 100
 const MAX_SCALE = 3
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
 const STICK_DELAY = 0.15
@@ -1116,6 +1119,29 @@ export class CanvasApp extends BaseScriptComponent {
     this.log("forma " + canvas.id + " " + shape)
   }
 
+  /** Distancia (cm) desde un punto al punto más cercano del rectángulo del canvas. */
+  private distanceToCanvas(c: CanvasInstance, point: vec3): number {
+    const local = c.toLocal(point)
+    const b = c.renderer.getBounds()
+    const x = Math.max(b.minX, Math.min(b.maxX, local.x))
+    const y = Math.max(b.minY, Math.min(b.maxY, local.y))
+    return c.toWorld(new vec3(x, y, 0)).distance(point)
+  }
+
+  /** Los botones solo en el canvas seleccionado y si está cerca; si se ocultan, se cierra lo que tuvieran abierto. */
+  private updateButtonsVisibility(c: CanvasInstance, eye: vec3): void {
+    if (!c.bar) return
+    const show = c === this.active && c.placed && this.distanceToCanvas(c, eye) <= BUTTONS_MAX_DISTANCE
+    const bar = c.bar.sceneObject
+    if (bar.enabled === show) return
+    if (!show) {
+      if (this.menuCanvas === c) this.closeEdgeMenu()
+      c.bar.setWheel(false)
+    }
+    bar.enabled = show
+    if (c.undoButton) c.undoButton.enabled = show
+  }
+
   /** El menú va en la esquina superior derecha. En una mesa se inclina hacia el usuario y se eleva para no hundirse en ella. */
   private updateEdgeBarPose(canvas: CanvasInstance): void {
     const b = canvas.renderer.getBounds()
@@ -1584,7 +1610,7 @@ export class CanvasApp extends BaseScriptComponent {
   /** El círculo de color o su rueda abierta: pulsarlos nunca cuenta como pulsar el canvas que tienen debajo. */
   private rayHitsPalette(origin: vec3, dir: vec3): boolean {
     return this.canvases.some((c) => {
-      if (!c.bar || !c.placed) return false
+      if (!c.bar || !c.placed || !c.bar.sceneObject.enabled) return false
       const p = c.rayPoint(origin, dir, 1.4)
       return !!p && c.bar.paletteContains(p.sub(c.hubPoint))
     })
@@ -1986,6 +2012,7 @@ export class CanvasApp extends BaseScriptComponent {
     for (const c of this.canvases) {
       c.renderer.setTextFlipped(c.orientation === "horizontal" && c.toLocal(eye).y > 0)
       this.updateEdgeBarPose(c)
+      this.updateButtonsVisibility(c, eye)
     }
     this.links.update()
     this.updateEraserRing()
