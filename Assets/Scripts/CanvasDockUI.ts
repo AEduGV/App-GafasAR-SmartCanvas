@@ -116,7 +116,7 @@ const PANEL_W = 19
 
 // Opciones que despliega Guardar, a su derecha.
 const SAVE_OPTIONS: ButtonDef[] = [
-  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.save},
+  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.folder_copy},
   {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
 ]
 const PANEL_GAP = 1

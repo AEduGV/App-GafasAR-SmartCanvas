@@ -1361,7 +1361,7 @@ export class CanvasApp extends BaseScriptComponent {
           if (grouped !== entry.grouped) {
             entry.grouped = grouped
             paintPill(entry.button, grouped)
-            setPillIcon(entry.button, grouped ? ICON.ungroup : ICON.join)
+            setPillIcon(entry.button, grouped ? ICON.link_off : ICON.join)
           }
         }
       }

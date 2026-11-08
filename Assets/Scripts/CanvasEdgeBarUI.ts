@@ -72,9 +72,9 @@ interface ItemDef {
 }
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
-  {action: "draw", label: "Dibujar", icon: ICON.draw},
+  {action: "draw", label: "Dibujar", icon: ICON.brush},
   {action: "erase", label: "Goma", icon: ICON.ink_eraser},
-  {action: "write", label: "Escribir texto", icon: ICON.edit_note},
+  {action: "write", label: "Escribir texto", icon: ICON.title},
   {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
 ]
 
