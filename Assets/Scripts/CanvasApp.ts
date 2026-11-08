@@ -10,13 +10,15 @@ import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from
 import {ICON} from "./CanvasIcons"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
 import {appendArrow, CanvasLinks} from "./CanvasLinks"
-import {appendFill, appendStroke, CanvasShape, resamplePolyline, segmentDistance} from "./CanvasGeometry"
+import {appendFill, appendStroke, CanvasShape, resamplePolyline, roundedRect, segmentDistance} from "./CanvasGeometry"
 import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, layerZ, MeshSlot, retire, tintOf} from "./CanvasRenderer"
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {CanvasMannequin} from "./CanvasMannequin"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
+
+const THEME_FONT = requireAsset("../Fonts/Inter.ttf") as Font
 
 type Tool = "select" | "connect" | "draw" | "erase" | "underline"
 
@@ -61,6 +63,11 @@ const COLLAB_FIRST_DELAY = 1.2
 const COLLAB_STEP = 0.9
 // Escala de su canvas: más pequeño que uno propio a esa distancia, para que quepan él y Ana en la vista.
 const COLLAB_SCALE = 1.1
+// Etiqueta con el nombre de quien creó un canvas ajeno, en unidades del canvas.
+const OWNER_TAG_H = 4
+const OWNER_TAG_INSET = 2.5
+const OWNER_TAG_TEXT = 90
+const OWNER_TAG_CHAR_W = 1.7
 // Pasos de Deshacer que recuerda cada canvas.
 const UNDO_LIMIT = 40
 const SAME_PLANE_LIMIT = 25
@@ -390,6 +397,8 @@ export class CanvasApp extends BaseScriptComponent {
         bestDistance = distance
       }
     }
+    // El borde del canvas de otra persona no se estira (y sigue tapando lo que tiene detrás).
+    if (bestCanvas?.owner) return null
     return bestCanvas && bestGrab ? {canvas: bestCanvas, grab: bestGrab} : null
   }
 
@@ -959,7 +968,8 @@ export class CanvasApp extends BaseScriptComponent {
     canvas.renderer.setBounds(bounds)
     canvas.root.enabled = true
     canvas.renderer.setContentVisible(true)
-    this.ensureEdgeBar(canvas).sceneObject.enabled = true
+    canvas.renderer.setOwned(true)
+    this.makeOwnerTag(canvas)
 
     // La plantilla se prepara aparte y se pasa al canvas pieza a pieza, como si la fuera dibujando.
     const draft = new CanvasDocument()
@@ -980,6 +990,42 @@ export class CanvasApp extends BaseScriptComponent {
     this.dock.setPeople([COLLAB_NAME])
     this.dock.setStatus(COLLAB_NAME + " se ha unido y está creando un diagrama de flujo")
     this.log("colaborador " + COLLAB_NAME + " en " + canvas.id)
+  }
+
+  /**
+   * El canvas de otra persona no lleva menú radial ni Deshacer, porque no se puede editar: en la esquina
+   * superior izquierda va una etiqueta con un punto de su color y su nombre.
+   */
+  private makeOwnerTag(canvas: CanvasInstance): void {
+    const owner = canvas.owner
+    if (!owner) return
+    const tag = global.scene.createSceneObject("OwnerTag")
+    tag.setParent(canvas.root)
+    const w = OWNER_TAG_CHAR_W * owner.name.length + OWNER_TAG_H * 1.6
+    const b = canvas.renderer.getBounds()
+    const left = b.minX + OWNER_TAG_INSET
+    const top = b.maxY - OWNER_TAG_INSET
+    tag.getTransform().setLocalPosition(new vec3(left, top - OWNER_TAG_H / 2, 1.4))
+    const plate = new MeshSlot(tag, "Plate", withAlpha(COLOR.surface, 0.92), false)
+    appendFill(plate.begin(), roundedRect(w, OWNER_TAG_H, OWNER_TAG_H / 2).map((p) => new vec2(p.x + w / 2, p.y)), 0)
+    plate.commit()
+    // Opaco y algo por delante: el fondo semitransparente de la etiqueta no lo tapa.
+    const dot = new MeshSlot(tag, "Dot", owner.color)
+    appendFill(dot.begin(), roundedRect(OWNER_TAG_H * 0.4, OWNER_TAG_H * 0.4, OWNER_TAG_H * 0.2).map((p) => new vec2(p.x + OWNER_TAG_H * 0.55, p.y)), 0.2)
+    dot.commit()
+    const labelSo = global.scene.createSceneObject("Name")
+    labelSo.setParent(tag)
+    labelSo.getTransform().setLocalPosition(new vec3(OWNER_TAG_H * 0.95, 0, 0.1))
+    const t = labelSo.createComponent("Component.Text") as Text
+    t.font = THEME_FONT
+    t.size = OWNER_TAG_TEXT
+    t.depthTest = true
+    t.text = owner.name
+    t.textFill.color = COLOR.text
+    t.horizontalAlignment = HorizontalAlignment.Left
+    t.verticalAlignment = VerticalAlignment.Center
+    t.horizontalOverflow = HorizontalOverflow.Overflow
+    t.layoutRect = Rect.create(0, w, -OWNER_TAG_H / 2, OWNER_TAG_H / 2)
   }
 
   /** Cada cierto tiempo, Ana añade la siguiente pieza de la plantilla y la señala mientras la dibuja. */
@@ -1759,9 +1805,10 @@ export class CanvasApp extends BaseScriptComponent {
       this.startCanvasOutside(interactor)
       return
     }
-    // El canvas de un colaborador no se toca mientras lo está construyendo.
-    if ("canvas" in resolved && resolved.canvas.busy) {
-      this.dock.setStatus((resolved.canvas.owner?.name ?? "Alguien") + " está trabajando en este canvas")
+    // El canvas de otra persona no se puede tocar.
+    if ("canvas" in resolved && resolved.canvas.owner) {
+      const owner = resolved.canvas.owner.name
+      this.dock.setStatus(resolved.canvas.busy ? owner + " está trabajando en este canvas" : "Este canvas es de " + owner + ": solo puede editarlo quien lo creó")
       return
     }
     if ("link" in resolved) {

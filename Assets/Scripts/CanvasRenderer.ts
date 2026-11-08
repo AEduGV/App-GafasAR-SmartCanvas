@@ -57,6 +57,8 @@ const BORDER_HIGHLIGHT_DOT = 0.5
 // El canvas seleccionado brilla entero; el lado que se agarraría, más grueso y casi blanco.
 const BORDER_WIDTH = 0.12
 const BORDER_SELECTED_WIDTH = 0.3
+// El canvas de otra persona lleva su color en un borde algo más ancho, para que se note de quién es.
+const BORDER_OWNER_WIDTH = 0.32
 const BORDER_HIGHLIGHT_WIDTH = 0.5
 const BORDER_HIGHLIGHT_COLOR = new vec4(0.78, 0.95, 1, 1)
 
@@ -465,6 +467,7 @@ export class CanvasRenderer {
   private borderHighlight: MeshSlot
   private highlightGrab: BorderGrab | null = null
   private borderWidth = BORDER_WIDTH
+  private owned = false
   private surfaceHit: {interactable: Interactable; shape: BoxShape; collider: ColliderComponent}
   private layerPlanes: MeshSlot[] = []
   private layerLabels: Text[] = []
@@ -859,10 +862,16 @@ export class CanvasRenderer {
 
   /** El canvas seleccionado lleva el borde más grueso; el color lo pone `setBorderColor`. */
   setSelected(selected: boolean): void {
-    const width = selected ? BORDER_SELECTED_WIDTH : BORDER_WIDTH
+    const width = selected ? BORDER_SELECTED_WIDTH : this.owned ? BORDER_OWNER_WIDTH : BORDER_WIDTH
     if (width === this.borderWidth) return
     this.borderWidth = width
     this.drawBorder()
+  }
+
+  /** Canvas de otra persona: borde más ancho (su color lo pone `setBorderColor`). */
+  setOwned(owned: boolean): void {
+    this.owned = owned
+    this.setSelected(false)
   }
 
   /** Resalta solo el lado que se agarraría; en una esquina, sus dos lados. */
