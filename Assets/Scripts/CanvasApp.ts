@@ -81,6 +81,9 @@ const NOTICE_TIME = 2.5
 // Medidas aproximadas del texto a su tamaño normal, para que la caja crezca antes de que se encoja.
 const CHARS_PER_CM = 1.1
 const TEXT_LINE_H = 2.6
+// Texto convertido desde escritura a mano: alto de su letra respecto al de la línea dibujada, y tope de tamaño.
+const HANDWRITING_TEXT_RATIO = 0.5
+const MAX_TEXT_SCALE = 3
 const TEXT_BOX_PADDING = 2
 
 const DEFAULT_SIZE: Record<string, [number, number]> = {
@@ -2053,13 +2056,18 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const value = Array.from(text).slice(0, MAX_TEXT).join("")
     const chars = Array.from(value).length
-    const w = Math.max(10, Math.min(60, Math.max(b.maxX - b.minX, chars / CHARS_PER_CM + TEXT_BOX_PADDING + 1)))
-    const perLine = Math.max(6, Math.floor((w - TEXT_BOX_PADDING) * CHARS_PER_CM))
-    const lines = Math.max(value.split("\n").length, Math.ceil(chars / perLine))
-    const h = lines * TEXT_LINE_H + TEXT_BOX_PADDING
+    // La letra crece con la escritura, sin llegar a su tamaño: nunca menor que la normal ni mayor que el triple.
+    const drawnLines = Math.max(1, value.split("\n").length)
+    const drawnLineH = (b.maxY - b.minY) / drawnLines
+    const scale = Math.max(1, Math.min(MAX_TEXT_SCALE, (drawnLineH * HANDWRITING_TEXT_RATIO) / TEXT_LINE_H))
+    const naturalW = (chars / CHARS_PER_CM) * scale + TEXT_BOX_PADDING + 1
+    const w = Math.max(10, Math.min(60 * scale, Math.max(b.maxX - b.minX, naturalW)))
+    const perLine = Math.max(6, Math.floor(((w - TEXT_BOX_PADDING) * CHARS_PER_CM) / scale))
+    const lines = Math.max(drawnLines, Math.ceil(chars / perLine))
+    const h = lines * TEXT_LINE_H * scale + TEXT_BOX_PADDING
     const el = this.doc.add({
       kind: "text", shape: "rect", x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2, w, h,
-      layer: this.activeLayer, text: value, color: 0,
+      layer: this.activeLayer, text: value, color: 0, textScale: scale,
     })
     this.growAround(el.id)
     this.dock.setStatus("Escritura convertida en texto. Deshacer recupera los trazos")
@@ -2335,9 +2343,10 @@ export class CanvasApp extends BaseScriptComponent {
   private fitTextBox(id: string, startH: number): void {
     const el = this.doc.elements.get(id)
     if (!el || (el.kind !== "note" && el.kind !== "text")) return
-    const perLine = Math.max(6, Math.floor((el.w - TEXT_BOX_PADDING) * CHARS_PER_CM))
+    const scale = el.textScale ?? 1
+    const perLine = Math.max(6, Math.floor(((el.w - TEXT_BOX_PADDING) * CHARS_PER_CM) / scale))
     const lines = Math.ceil(Array.from(el.text).length / perLine)
-    const h = Math.max(startH, lines * TEXT_LINE_H + TEXT_BOX_PADDING)
+    const h = Math.max(startH, lines * TEXT_LINE_H * scale + TEXT_BOX_PADDING)
     if (h === el.h) return
     this.doc.update(id, {h, y: el.y + (el.h - h) / 2})
     this.growAround(id)

@@ -262,7 +262,7 @@ class ElementView {
     const insetX = isDiamond ? el.w * 0.2 : pad
     const insetY = isDiamond ? el.h * 0.2 : pad
     const isScreen = el.kind === "screen"
-    this.text.size = isScreen ? TITLE_SIZE : BODY_SIZE
+    this.text.size = (isScreen ? TITLE_SIZE : BODY_SIZE) * (el.textScale ?? 1)
     this.text.verticalAlignment = isScreen ? VerticalAlignment.Top : VerticalAlignment.Center
     this.text.layoutRect = Rect.create(-el.w / 2 + insetX, el.w / 2 - insetX, -el.h / 2 + insetY, el.h / 2 - insetY)
     this.text.text = el.text

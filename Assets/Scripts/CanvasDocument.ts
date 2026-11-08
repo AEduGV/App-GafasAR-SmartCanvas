@@ -22,6 +22,7 @@ export interface CanvasElement {
   parentId: string | null  // pantalla contenedora o elemento subrayado
   points: vec2[]           // trazos: puntos relativos a (x, y)
   strokeWidth: number
+  textScale: number        // tamaño de letra respecto al normal (1); la escritura convertida puede llegar a 3
 }
 
 export interface CanvasConnection {
@@ -61,7 +62,7 @@ export class CanvasDocument {
     const el: CanvasElement = {
       id: this.newId(init.kind),
       shape: "rect", x: 0, y: 0, w: 14, h: 9, layer: 0,
-      text: "", color: 0, groupId: null, parentId: null, points: [], strokeWidth: 0.5,
+      text: "", color: 0, groupId: null, parentId: null, points: [], strokeWidth: 0.5, textScale: 1,
       ...init,
     }
     this.elements.set(el.id, el)
