@@ -155,12 +155,24 @@ export function makeHitBox(so: SceneObject): {interactable: Interactable; shape:
   return {interactable, shape, collider}
 }
 
+// Lado de la esquina doblada de una nota, en proporción a su lado menor.
+const NOTE_FOLD = 0.24
+
+/** Contorno de una nota: un rectángulo con la esquina inferior derecha cortada en diagonal, como un post-it doblado. */
+function noteOutline(w: number, h: number, fold: number): vec2[] {
+  const hw = w / 2
+  const hh = h / 2
+  return [new vec2(-hw, hh), new vec2(-hw, -hh), new vec2(hw - fold, -hh), new vec2(hw, -hh + fold), new vec2(hw, hh)]
+}
+
 class ElementView {
   readonly root: SceneObject
   readonly interactable: Interactable
   private fill: MeshSlot
   private detail: MeshSlot
   private outline: MeshSlot
+  // La esquina doblada de las notas (post-it), de un tono más claro que el papel.
+  private fold: MeshSlot
   private text: Text
   private textSo: SceneObject
   private shape: BoxShape
@@ -173,6 +185,7 @@ class ElementView {
     this.root.setParent(parent)
     this.fill = new MeshSlot(this.root, "Fill", PALETTE[0].fill)
     this.detail = new MeshSlot(this.root, "Detail", COLOR.text)
+    this.fold = new MeshSlot(this.root, "Fold", COLOR.text)
     this.outline = new MeshSlot(this.root, "Outline", COLOR.primary)
     this.text = makeText(this.root, BODY_SIZE, COLOR.text)
     this.textSo = this.text.getSceneObject()
@@ -198,8 +211,21 @@ class ElementView {
       appendStroke(ob, el.points, false, el.strokeWidth + 0.35, -0.02)
       this.text.enabled = false
     } else {
-      const pts = el.kind === "text" ? roundedRect(el.w, el.h, RADIUS.small) : shapeOutline(el.shape, el.w, el.h)
+      const folded = el.kind === "note" && el.shape === "rect"
+      const fold = folded ? Math.min(el.w, el.h) * NOTE_FOLD : 0
+      const pts =
+        el.kind === "text" ? roundedRect(el.w, el.h, RADIUS.small) : folded ? noteOutline(el.w, el.h, fold) : shapeOutline(el.shape, el.w, el.h)
       this.fill.setColor(this.fillColor(el))
+      const fb2 = this.fold.begin()
+      if (folded) {
+        // Solapa doblada hacia dentro sobre la esquina cortada, algo más clara que el papel.
+        const hw = el.w / 2
+        const hh = el.h / 2
+        appendFill(fb2, [new vec2(hw, -hh + fold), new vec2(hw - fold, -hh + fold), new vec2(hw - fold, -hh)], 0.03)
+        const c = this.fillColor(el)
+        this.fold.setColor(new vec4(Math.min(1, c.x * 1.45 + 0.08), Math.min(1, c.y * 1.45 + 0.08), Math.min(1, c.z * 1.45 + 0.08), 1))
+      }
+      this.fold.commit()
       if (el.kind !== "text") appendFill(fb, pts, 0)
       if (el.kind === "screen" || el.kind === "note") appendStroke(db, pts, true, 0.1, 0.02)
       this.appendGateDetails(db, el)
