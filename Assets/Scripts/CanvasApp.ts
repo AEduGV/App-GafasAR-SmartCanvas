@@ -100,7 +100,12 @@ const FLOATING_DISTANCE = 50
 const MIN_SCALE = 0.4
 // Los botones de un canvas (+, Deshacer, color) solo se ven en el seleccionado y a esta distancia o menos (cm).
 const BUTTONS_MAX_DISTANCE = 100
+// Esa distancia se mide hasta el cuerpo del usuario: una barra vertical desde los ojos hasta esta altura por debajo.
+const BODY_HEIGHT = 150
+const BODY_SAMPLES = 7
 const MAX_SCALE = 3
+// Al soltar un canvas agarrado, se pega a la superficie apuntada hasta esta distancia (el rayo de SIK llega a 500).
+const DROP_MAX_DISTANCE = 450
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
 const STICK_DELAY = 0.15
 // Entre dos paredes se exige más: el canto de un marco no debe torcer el canvas al pasar por encima.
@@ -1139,10 +1144,20 @@ export class CanvasApp extends BaseScriptComponent {
     return c.toWorld(new vec3(x, y, 0)).distance(point)
   }
 
+  /** Distancia (cm) del canvas al cuerpo del usuario, una barra vertical bajo los ojos: una mesa al lado cuenta como cerca. */
+  private distanceToBody(c: CanvasInstance, eye: vec3): number {
+    let best = Infinity
+    for (let i = 0; i < BODY_SAMPLES; i++) {
+      const p = eye.add(new vec3(0, (-BODY_HEIGHT * i) / (BODY_SAMPLES - 1), 0))
+      best = Math.min(best, this.distanceToCanvas(c, p))
+    }
+    return best
+  }
+
   /** Los botones solo en el canvas seleccionado y si está cerca; si se ocultan, se cierra lo que tuvieran abierto. */
   private updateButtonsVisibility(c: CanvasInstance, eye: vec3): void {
     if (!c.bar) return
-    const show = c === this.active && c.placed && this.distanceToCanvas(c, eye) <= BUTTONS_MAX_DISTANCE
+    const show = c === this.active && c.placed && this.distanceToBody(c, eye) <= BUTTONS_MAX_DISTANCE
     const bar = c.bar.sceneObject
     if (bar.enabled === show) return
     if (!show) {
@@ -1373,7 +1388,8 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const hit = drag.surface
     const fresh = hit && getTime() - hit.time < 0.5 ? hit : null
-    const near = fresh && !this.isFarSurface(fresh.position) ? fresh : null
+    // Cualquier superficie apuntada al alcance del rayo, aunque esté más lejos que las que reciben un canvas nuevo.
+    const near = fresh && fresh.position.distance(ball.origin) <= DROP_MAX_DISTANCE ? fresh : null
     const limit = fresh ? fresh.position.distance(ball.origin) - BALL_SURFACE_GAP : ball.distance
     const point = ball.origin.add(ball.dir.uniformScale(Math.max(BALL_SURFACE_GAP, Math.min(ball.distance, limit))))
     const frame = near ? this.surfaceFrame(near.position, near.normal) : null
