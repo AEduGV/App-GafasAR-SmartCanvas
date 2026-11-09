@@ -16,6 +16,7 @@ import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {CanvasMannequin} from "./CanvasMannequin"
 import {CanvasLibrary, LibraryKind} from "./CanvasLibraryUI"
+import {CanvasRipples} from "./CanvasRipples"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -104,8 +105,6 @@ const BUTTONS_MAX_DISTANCE = 100
 const BODY_HEIGHT = 150
 const BODY_SAMPLES = 7
 const MAX_SCALE = 3
-// Al soltar un canvas agarrado, se pega a la superficie apuntada hasta esta distancia (el rayo de SIK llega a 500).
-const DROP_MAX_DISTANCE = 450
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
 const STICK_DELAY = 0.15
 // Entre dos paredes se exige más: el canto de un marco no debe torcer el canvas al pasar por encima.
@@ -246,6 +245,8 @@ export class CanvasApp extends BaseScriptComponent {
   private handwriting: HandwritingAssist
   // Panel con todas las figuras o stickers, abierto desde el «…» del menú radial de un canvas.
   private library: {canvas: CanvasInstance; panel: CanvasLibrary} | null = null
+  // Ondas en la miniatura agarrada mientras, al soltarla, se pegaría a la pared o mesa apuntada.
+  private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation} | null = null
   // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
   private collaborator: {
     mannequin: CanvasMannequin
@@ -677,8 +678,11 @@ export class CanvasApp extends BaseScriptComponent {
     return {...this.virtualPoint(origin, dir, this.orientation), fromSurface: false}
   }
 
+  /** Lejos del cuerpo del usuario (la barra vertical bajo los ojos), no de su cabeza: una mesa al lado cuenta como cerca. */
   private isFarSurface(point: vec3): boolean {
-    return point.distance(this.camera.getWorldPosition()) > FAR_SURFACE_DISTANCE
+    const eye = this.camera.getWorldPosition()
+    const y = Math.max(eye.y - BODY_HEIGHT, Math.min(eye.y, point.y))
+    return point.distance(new vec3(eye.x, y, eye.z)) > FAR_SURFACE_DISTANCE
   }
 
   private virtualPoint(origin: vec3, dir: vec3, orientation: Orientation): {point: vec3 | null; normal: vec3} {
@@ -1367,6 +1371,39 @@ export class CanvasApp extends BaseScriptComponent {
     drag.rotation = quat.slerp(ball.fromRotation, facing, e)
     drag.target = vec3.lerp(ball.from, point, e)
     this.applyDragPose(drag)
+    this.updateRipples(drag)
+  }
+
+  /** La superficie apuntada a la que se pegaría el canvas al soltarlo: a 1,5 m o menos y de una orientación válida. */
+  private ballContact(drag: CanvasDrag): {position: vec3; frame: SurfaceFrame} | null {
+    const hit = drag.surface
+    if (!hit || getTime() - hit.time >= 0.5 || this.isFarSurface(hit.position)) return null
+    const frame = this.surfaceFrame(hit.position, hit.normal)
+    return frame ? {position: hit.position, frame} : null
+  }
+
+  /** Muestra u oculta las ondas según haya contacto, y avisa en la línea de estado de dónde quedará. */
+  private updateRipples(drag: CanvasDrag): void {
+    const contact = drag.ball && drag.ball.travelled ? this.ballContact(drag) : null
+    const canvas = drag.members[0].canvas
+    const orientation = contact?.frame.orientation ?? null
+    if (this.ripples && (this.ripples.canvas !== canvas || this.ripples.orientation !== orientation)) this.clearRipples()
+    if (!contact || !orientation) {
+      if (drag.ball) this.dock.setStatus("Lleva el canvas adonde quieras y suelta para colocarlo")
+      return
+    }
+    if (!this.ripples) {
+      const fx = new CanvasRipples(canvas.root, canvas.renderer.outlinePoints(), canvas.renderer.getBounds())
+      this.ripples = {canvas, fx, orientation}
+      this.dock.setStatus(orientation === "vertical" ? "Tocando la pared: suelta para pegarlo" : "Tocando la mesa: suelta para dejarlo encima")
+    }
+    this.ripples.fx.update()
+  }
+
+  private clearRipples(): void {
+    if (!this.ripples) return
+    this.ripples.fx.destroy()
+    this.ripples = null
   }
 
   /**
@@ -1378,6 +1415,7 @@ export class CanvasApp extends BaseScriptComponent {
     const ball = drag.ball
     if (!ball) return false
     drag.ball = null
+    this.clearRipples()
     drag.scale = ball.fullScale
     // Si no se ha llevado a ningún sitio, vuelve exactamente a donde estaba.
     if (!ball.travelled) {
@@ -1388,11 +1426,12 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const hit = drag.surface
     const fresh = hit && getTime() - hit.time < 0.5 ? hit : null
-    // Cualquier superficie apuntada al alcance del rayo, aunque esté más lejos que las que reciben un canvas nuevo.
-    const near = fresh && fresh.position.distance(ball.origin) <= DROP_MAX_DISTANCE ? fresh : null
     const limit = fresh ? fresh.position.distance(ball.origin) - BALL_SURFACE_GAP : ball.distance
     const point = ball.origin.add(ball.dir.uniformScale(Math.max(BALL_SURFACE_GAP, Math.min(ball.distance, limit))))
-    const frame = near ? this.surfaceFrame(near.position, near.normal) : null
+    // La misma regla que las ondas: solo una superficie a 1,5 m o menos; más lejos, flotando de frente.
+    const contact = this.ballContact(drag)
+    const near = contact ? fresh : null
+    const frame = contact ? contact.frame : null
     const basis = this.basisFor("vertical")
     drag.rotation = frame ? quat.lookAt(frame.normal, frame.up) : quat.lookAt(basis.normal, basis.up)
     drag.target = frame && near ? near.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
