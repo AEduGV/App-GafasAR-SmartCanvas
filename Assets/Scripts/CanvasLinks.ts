@@ -1,4 +1,5 @@
-// Flechas entre canvas. Guardan solo quién enlaza con quién: la forma se deduce de sus poses.
+// Flechas entre canvas, o de un canvas a un punto del entorno real. Guardan solo quién enlaza con quién (o con qué
+// punto): la forma se deduce de sus poses.
 import {Interactable} from "SpectaclesInteractionKit.lspkg/Components/Interaction/Interactable/Interactable"
 import {appendCone, appendTube, outlineIntersection} from "./CanvasGeometry"
 import {CanvasInstance} from "./CanvasInstance"
@@ -9,6 +10,8 @@ const LIFT = 0.3
 const TUBE = 0.2
 const HEAD_RADIUS = 0.7
 const HEAD_LENGTH = 2
+// Grosor (cm) de la zona pulsable de una flecha al entorno, a lo largo de toda ella.
+const WORLD_HIT_THICKNESS = 4
 
 function center(inst: CanvasInstance): vec2 {
   const b = inst.renderer.getBounds()
@@ -52,9 +55,11 @@ class LinkView {
   private outline: MeshSlot
   private handle: SceneObject
   private dot: MeshSlot
+  private hit: {shape: BoxShape; collider: ColliderComponent}
   private key = ""
 
-  constructor(parent: SceneObject, id: string, readonly from: CanvasInstance, readonly to: CanvasInstance) {
+  /** `to`: otro canvas, o un punto fijo del mundo al que apunta (un objeto físico, sin reconocerlo). */
+  constructor(parent: SceneObject, id: string, readonly from: CanvasInstance, readonly to: CanvasInstance | vec3) {
     this.root = global.scene.createSceneObject(id)
     this.root.setParent(parent)
     this.tube = new MeshSlot(this.root, "Tube", COLOR.text)
@@ -66,6 +71,7 @@ class LinkView {
     const hit = makeHitBox(this.handle)
     hit.shape.size = new vec3(3.4, 3.4, 3.4)
     hit.collider.shape = hit.shape
+    this.hit = hit
     this.interactable = hit.interactable
     appendTube(this.dot.begin(), [new vec3(-0.5, 0, 0), new vec3(0.5, 0, 0)], 0.6)
     this.dot.commit()
@@ -73,12 +79,15 @@ class LinkView {
   }
 
   refresh(): void {
-    const key = poseKey(this.from) + "|" + poseKey(this.to)
+    const to = this.to
+    const point = to instanceof CanvasInstance ? null : to
+    const key = poseKey(this.from) + "|" + (point ? point.toString() : poseKey(to as CanvasInstance))
     if (key === this.key) return
     this.key = key
-    const start = edgeToward(this.from, worldCenter(this.to))
-    const end = edgeToward(this.to, worldCenter(this.from))
-    const scale = (this.from.scale + this.to.scale) / 2
+    const target = point ?? worldCenter(to as CanvasInstance)
+    const start = edgeToward(this.from, target)
+    const end = point ?? edgeToward(to as CanvasInstance, worldCenter(this.from))
+    const scale = point ? this.from.scale : (this.from.scale + (to as CanvasInstance).scale) / 2
     const tb = this.tube.begin()
     appendArrow(tb, start, end, scale)
     this.tube.commit()
@@ -87,12 +96,28 @@ class LinkView {
     this.outline.commit()
     const t = this.handle.getTransform()
     t.setWorldPosition(start.add(end).uniformScale(0.5))
+    if (point) {
+      // Hacia el entorno la flecha suele ser larga y lejana: se pulsa en cualquier punto de ella, no solo en el centro.
+      const dir = end.sub(start)
+      const length = Math.max(dir.length, 1)
+      const up = Math.abs(dir.normalize().y) > 0.95 ? vec3.forward() : vec3.up()
+      t.setWorldRotation(quat.lookAt(dir.normalize(), up))
+      t.setWorldScale(vec3.one())
+      this.hit.shape.size = new vec3(WORLD_HIT_THICKNESS, WORLD_HIT_THICKNESS, length)
+      this.hit.collider.shape = this.hit.shape
+      return
+    }
     t.setWorldRotation(this.from.transform.getWorldRotation())
     t.setWorldScale(new vec3(scale, scale, scale))
   }
 
   setSelected(v: boolean): void {
     this.outline.setVisible(v)
+  }
+
+  /** Apunta a un punto del entorno, no a otro canvas. */
+  get pointsAtWorld(): boolean {
+    return !(this.to instanceof CanvasInstance)
   }
 
   destroy(): void {
@@ -121,6 +146,17 @@ export class CanvasLinks {
     const id = "link_" + this.nextId++
     this.views.set(id, new LinkView(this.root, id, from, to))
     return true
+  }
+
+  /** Una flecha desde un canvas hasta un punto del entorno real. */
+  addToPoint(from: CanvasInstance, point: vec3): void {
+    const id = "link_" + this.nextId++
+    this.views.set(id, new LinkView(this.root, id, from, point))
+  }
+
+  /** Si la flecha apunta al entorno (se quita con una pulsación) en vez de a otro canvas. */
+  pointsAtWorld(id: string): boolean {
+    return this.views.get(id)?.pointsAtWorld ?? false
   }
 
   remove(id: string): void {

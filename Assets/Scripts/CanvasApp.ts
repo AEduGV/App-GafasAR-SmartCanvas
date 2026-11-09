@@ -42,8 +42,18 @@ const DRAG_PLACE_DISTANCE = 8
 // Dos canvas se consideran juntos con menos de esta separación, en unidades del canvas.
 const ADJACENT_GAP = 6
 const SNAP_GAP = 0.4
+// Alineación automática al soltar un canvas cerca de otro, en cm reales: hueco máximo entre ellos, distancia máxima
+// entre sus planos y separación con la que quedan. El giro máximo, en grados.
+const ALIGN_NEAR = 10
+const ALIGN_DEPTH = 15
+const ALIGN_GAP = 1.5
+const ALIGN_MAX_ROTATION = 30
 // El botón de agrupar aparece entre dos canvas con menos de este hueco, en unidades del canvas.
 const LINK_BUTTON_GAP = 15
+// Flecha al entorno: hasta dónde busca una superficie (cm; el rayo de SIK llega a 500) y, si no hay, a qué distancia
+// del usuario deja la punta.
+const WORLD_ARROW_REACH = 500
+const WORLD_ARROW_FALLBACK = 120
 const LINK_BUTTON_SIZE = 4.6
 const LINK_BUTTON_Z = 2
 const UNDO_SIZE = 4.2
@@ -1663,6 +1673,65 @@ export class CanvasApp extends BaseScriptComponent {
     }
   }
 
+  /**
+   * Al soltar un canvas muy cerca de otro, se coloca a su lado: con su mismo giro, los bordes superiores a la misma
+   * altura y una separación fija. No lo hace si tendría que girar más de 30 grados. Mueve el grupo entero si lo hay.
+   */
+  private alignToNeighbour(moved: CanvasInstance[]): boolean {
+    const anchor = moved[0]
+    const ab = anchor.renderer.getBounds()
+    const anchorCenterLocal = new vec3((ab.minX + ab.maxX) / 2, (ab.minY + ab.maxY) / 2, 0)
+    const center = anchor.toWorld(anchorCenterLocal)
+    let best: {other: CanvasInstance; gap: number} | null = null
+    for (const other of this.canvases) {
+      if (moved.indexOf(other) >= 0 || !other.placed || other.orientation !== anchor.orientation) continue
+      if (moved.some((m) => this.isGrouped(m, other))) continue
+      // Giro necesario para igualarlo: ángulo del cuaternión que lleva de uno a otro.
+      const rel = other.transform.getWorldRotation().multiply(anchor.transform.getWorldRotation().invert())
+      const angle = 2 * Math.acos(Math.min(1, Math.abs(rel.w)))
+      if (angle > (ALIGN_MAX_ROTATION * Math.PI) / 180) continue
+      const ob = other.renderer.getBounds()
+      const f = anchor.scale / other.scale
+      const hw = ((ab.maxX - ab.minX) / 2) * f
+      const hh = ((ab.maxY - ab.minY) / 2) * f
+      const lc = other.toLocal(center)
+      // Las medidas locales están en unidades del otro canvas; por su escala, en cm.
+      const cm = other.scale
+      if (Math.abs(lc.z) * cm > ALIGN_DEPTH) continue
+      const gapX = Math.max(ob.minX - (lc.x + hw), lc.x - hw - ob.maxX)
+      const gapY = Math.max(ob.minY - (lc.y + hh), lc.y - hh - ob.maxY)
+      if (gapX * cm > ALIGN_NEAR || gapY * cm > ALIGN_NEAR) continue
+      const gap = Math.max(gapX, gapY)
+      if (!best || gap < best.gap) best = {other, gap}
+    }
+    if (!best) return false
+    const other = best.other
+    // 1. Mismo giro que el otro, alrededor del centro del que se movió.
+    const rel = other.transform.getWorldRotation().multiply(anchor.transform.getWorldRotation().invert())
+    for (const c of moved) {
+      const t = c.transform
+      t.setWorldRotation(rel.multiply(t.getWorldRotation()))
+      t.setWorldPosition(center.add(rel.multiplyVec3(t.getWorldPosition().sub(center))))
+    }
+    // 2. A su lado, con los bordes superiores a la misma altura.
+    const ob = other.renderer.getBounds()
+    const f = anchor.scale / other.scale
+    const hw = ((ab.maxX - ab.minX) / 2) * f
+    const hh = ((ab.maxY - ab.minY) / 2) * f
+    const now = anchor.toWorld(anchorCenterLocal)
+    const lc = other.toLocal(now)
+    const side = lc.x >= (ob.minX + ob.maxX) / 2 ? 1 : -1
+    const gap = ALIGN_GAP / other.scale
+    const target = new vec3(side > 0 ? ob.maxX + gap + hw : ob.minX - gap - hw, ob.maxY - hh, 0)
+    const delta = other.toWorld(target).sub(now)
+    for (const c of moved) {
+      c.transform.setWorldPosition(c.transform.getWorldPosition().add(delta))
+      c.orientation = other.orientation
+    }
+    this.log("canvas " + anchor.id + " alineado con " + other.id)
+    return true
+  }
+
   /** Al soltar cerca de otro canvas, los deja exactamente pegados y en el mismo plano. */
   private snapToNeighbour(moved: CanvasInstance[]): boolean {
     const anchor = moved[0]
@@ -1701,7 +1770,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.applyDragPose(drag)
     }
     const moved = (drag?.members ?? []).map((m) => m.canvas)
-    const snapped = moved.length > 0 && this.snapToNeighbour(moved)
+    const snapped = moved.length > 0 && (this.alignToNeighbour(moved) || this.snapToNeighbour(moved))
     const near = this.canvases.some(
       (c) => moved.indexOf(c) < 0 && c.placed && moved.some((m) => !this.isGrouped(m, c) && this.linkButtonGap(m, c))
     )
@@ -2076,6 +2145,13 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     if ("link" in resolved) {
+      // Una flecha al entorno se quita con una pulsación.
+      if (this.links.pointsAtWorld(resolved.link)) {
+        this.links.remove(resolved.link)
+        this.dock.setStatus("Arrow removed")
+        this.log("flecha al entorno quitada")
+        return
+      }
       this.clearSelection()
       this.links.select(resolved.link)
       this.publishSelection()
@@ -2398,7 +2474,7 @@ export class CanvasApp extends BaseScriptComponent {
   private toolHint(): string {
     switch (this.tool) {
       case "connect":
-        return "Drag from one block to another, or from this canvas to another canvas"
+        return "Drag from this canvas to another canvas or to a real object, or from one block to another"
       case "draw":
         return "Draw on the canvas: nothing is painted outside it"
       case "erase":
@@ -2452,7 +2528,15 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     if (!press.id) {
-      this.dock.setStatus("Release the arrow on another canvas")
+      // Fuera de otro canvas, la flecha apunta al entorno real: a la superficie que hay en esa dirección o, si no se
+      // detecta ninguna, a un punto fijo en el aire. No reconoce el objeto: solo marca la dirección.
+      // Soltar sobre el propio canvas (o un simple toque) no crea nada: la flecha tiene que salir de él.
+      const own = ray ? this.active.rayPoint(ray.origin, ray.dir) : null
+      if (!ray || (own && this.active.contains(own))) {
+        this.dock.setStatus("Release the arrow on another canvas or on a real object")
+        return
+      }
+      this.addWorldArrow(this.active, ray.origin, ray.dir)
       return
     }
     const direct = this.renderer.target(interactor.currentInteractable)
@@ -2470,6 +2554,23 @@ export class CanvasApp extends BaseScriptComponent {
     const conn = this.doc.connect(press.id, toId, label)
     this.dock.setStatus(conn ? "Connection created" : "Those blocks are already connected")
     this.log("conexion " + press.id + " -> " + toId + (conn ? "" : " (ya existia)"))
+  }
+
+  private addWorldArrow(canvas: CanvasInstance, origin: vec3, dir: vec3): void {
+    const place = (point: vec3) => {
+      if (!this.canvases.includes(canvas)) return
+      this.links.addToPoint(canvas, point)
+      this.dock.setStatus("Arrow pointing at the real world. Tap it to remove it")
+      this.log("flecha al entorno desde " + canvas.id)
+    }
+    const fallback = origin.add(dir.uniformScale(WORLD_ARROW_FALLBACK))
+    if (!this.hitSession) {
+      place(fallback)
+      return
+    }
+    this.hitSession.hitTest(origin, origin.add(dir.uniformScale(WORLD_ARROW_REACH)), (result) => {
+      place(result ? result.position : fallback)
+    })
   }
 
   private elementAtPointer(interactor: Interactor, exclude: string): string | null {
