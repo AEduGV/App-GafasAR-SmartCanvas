@@ -1949,7 +1949,8 @@ export class CanvasApp extends BaseScriptComponent {
       this.dock.setStatus(this.toolHint())
       return
     }
-    const panel = new CanvasLibrary(canvas.root, kind, !!canvas.owner)
+    // A la derecha, junto al botón, también en el canvas de otra persona (a petición del usuario, 2026-11-09).
+    const panel = new CanvasLibrary(canvas.root, kind)
     panel.place(canvas.renderer.getBounds())
     this.library = {canvas, panel}
     this.dock.setStatus(kind === "shapes" ? "Pick a shape to add. Tap outside to close" : "Pick a sticker to add. Tap outside to close")
