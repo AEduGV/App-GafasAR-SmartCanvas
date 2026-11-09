@@ -101,6 +101,8 @@ const FLOATING_DISTANCE = 50
 const MIN_SCALE = 0.4
 // Los botones de un canvas (+, Deshacer, color) solo se ven en el seleccionado y a esta distancia o menos (cm).
 const BUTTONS_MAX_DISTANCE = 100
+// El botón de stickers del canvas de otra persona se ve desde más lejos (a petición del usuario, 2026-11-09).
+const STICKER_BUTTON_MAX_DISTANCE = 200
 // Esa distancia se mide hasta el cuerpo del usuario: una barra vertical desde los ojos hasta esta altura por debajo.
 const BODY_HEIGHT = 150
 const BODY_SAMPLES = 7
@@ -1221,7 +1223,7 @@ export class CanvasApp extends BaseScriptComponent {
   private updateButtonsVisibility(c: CanvasInstance, eye: vec3): void {
     if (c.owner && c.stickerButton) {
       // En un canvas ajeno no hace falta seleccionarlo (no se puede): basta con estar cerca.
-      const near = this.distanceToBody(c, eye) <= BUTTONS_MAX_DISTANCE
+      const near = this.distanceToBody(c, eye) <= STICKER_BUTTON_MAX_DISTANCE
       if (c.stickerButton.enabled !== near) {
         if (!near && this.library?.canvas === c) this.closeLibrary()
         c.stickerButton.enabled = near
