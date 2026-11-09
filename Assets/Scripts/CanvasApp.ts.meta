@@ -43,4 +43,4 @@
     -
       {}
   InputLines:
-    - '// @input AssignableType_1 dock {"hint":"Panel de herramientas"}'
+    - '// @input AssignableType_1 dock {"hint":"Tools panel"}'
