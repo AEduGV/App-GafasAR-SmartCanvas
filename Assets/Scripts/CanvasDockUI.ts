@@ -95,6 +95,8 @@ interface InfoPanel {
   buttons: string[]
 }
 
+const SESSION_BUTTON = "sesión compartida"
+
 const PANELS: Record<string, InfoPanel> = {
   account: {
     title: "Cuenta",
@@ -103,8 +105,9 @@ const PANELS: Record<string, InfoPanel> = {
   },
   collab: {
     title: "Colaboración",
-    lines: ["En este espacio: solo tú", "Edita con otras personas", "en tiempo real"],
-    buttons: ["Invitar a alguien", "Compartir este canvas", "Permisos de edición"],
+    lines: ["En este espacio: solo tú"],
+    // La sesión compartida va al final y destacada; su texto cambia según esté abierta o no.
+    buttons: ["Invitar a alguien", "Permisos de edición", SESSION_BUTTON],
   },
   tutorials: {
     title: "Tutoriales",
@@ -164,6 +167,8 @@ export class CanvasDockUI extends BaseScriptComponent {
   private panelPlate: MeshSlot | null = null
   private panelBody: SceneObject | null = null
   private openPanel: string | null = null
+  // Sesión compartida de ejemplo (para el vídeo): solo cambia el botón y avisa.
+  private sharedSession = false
   private panelSize = new vec2(PANEL_W, 10)
   private panelTop = MENU_TOP
   private ready = false
@@ -385,8 +390,19 @@ export class CanvasDockUI extends BaseScriptComponent {
     text(def.title, PANEL_TITLE_SIZE, PANEL_TITLE_H, COLOR.text)
     for (const line of def.lines) text(line, PANEL_TEXT_SIZE, PANEL_LINE_H, COLOR.textMuted)
     y -= GAP * 2
-    for (const label of def.buttons) {
-      const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => false, () => {
+    for (const item of def.buttons) {
+      const isSession = item === SESSION_BUTTON
+      const label = isSession ? (this.sharedSession ? "Cerrar sesión compartida" : "Iniciar sesión compartida") : item
+      // La sesión compartida lleva siempre el borde azul y grueso del estado activo: es la acción principal.
+      const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => isSession, () => {
+        if (isSession) {
+          this.sharedSession = !this.sharedSession
+          this.setStatus(this.sharedSession ? "Sesión compartida iniciada: otras personas ya pueden unirse" : "Sesión compartida cerrada")
+          // Se vuelve a montar el panel para que el botón muestre su texto nuevo.
+          this.openPanel = null
+          this.togglePanel("collab")
+          return
+        }
         // Invitar trae a un colaborador de ejemplo; los demás botones aún no hacen nada.
         if (label === "Invitar a alguien") {
           this._onAction.invoke("invite")
