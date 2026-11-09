@@ -1355,8 +1355,8 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   /**
-   * Reaparece con su tamaño, en la dirección de la miniatura: en la superficie cercana a la que se apunta o, si no hay,
-   * flotando de frente a la distancia que tenía. Traerlo hasta la miniatura lo haría enorme.
+   * Reaparece en la dirección de la miniatura: en la superficie cercana a la que se apunta o, si no hay, flotando de
+   * frente a la distancia que tenía, y con la escala que hace falta para verse del mismo tamaño que antes de agarrarlo.
    * Devuelve si cambió de sitio.
    */
   private dropBall(drag: CanvasDrag): boolean {
@@ -1380,6 +1380,9 @@ export class CanvasApp extends BaseScriptComponent {
     const basis = this.basisFor("vertical")
     drag.rotation = frame ? quat.lookAt(frame.normal, frame.up) : quat.lookAt(basis.normal, basis.up)
     drag.target = frame && near ? near.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
+    // Se ve del mismo tamaño que antes de agarrarlo: más lejos, más grande en proporción a la distancia.
+    const ratio = drag.target.distance(ball.origin) / Math.max(1, ball.distance)
+    drag.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, ball.fullScale * ratio))
     for (const m of drag.members) m.canvas.orientation = frame ? frame.orientation : "vertical"
     this.applyDragPose(drag)
     return true
