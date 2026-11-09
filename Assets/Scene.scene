@@ -6,6 +6,8 @@
     - !<own> f5d74682-203a-4970-81ea-9fa7b88c96bb
     - !<own> a0c8f835-9991-47e9-a0fc-ebea90b44b7a
     - !<own> 0ad04a88-68e4-48d2-9c91-e5150c7f95b8
+    - !<own> 467ce288-308f-442f-8134-15cf360fd7f6
+    - !<own> 7bf1624b-6a1b-4a1f-a99b-f5f01fc0ecfd
   layers: !<Layers/267ee9a7-aff2-4f9d-9a49-f71214747d03>
     userLayers:
       - id: 1
@@ -176,6 +178,23 @@
   FalloffType: None
   FalloffRange: .inf
   ShadowType: None
+- !<ScriptComponent/00566152-4072-4189-9ed8-d82056dfa1ee>
+  PrefabRemaps:
+    []
+  Name: ModelToggleButton
+  Enabled: true
+  ScriptAsset: !<reference> 02fee8b4-c565-4958-b067-16d9e3e1eb98
+  ScriptInputsDefault:
+    size: true
+  ScriptTypesDefault:
+    {}
+  ScriptInputs:
+    "":
+      target: !<reference.SceneObject> 467ce288-308f-442f-8134-15cf360fd7f6
+      size: !<float> 5.000000
+  ScriptTypes:
+    "":
+      {}
 - !<SceneObject/012a3973-9507-4230-a6ff-2b8dfd2154fe>
   PrefabRemaps:
     []
@@ -520,9 +539,6 @@
   Enabled: true
   ScriptAsset: !<reference> 37976aca-6847-44c8-88d9-5edb6aadbbf2
   ScriptInputsDefault:
-    openAIToken: true
-    googleToken: true
-    snapToken: true
     enableLogging: true
     enableLoggingLifecycle: true
   ScriptTypesDefault:
@@ -800,6 +816,25 @@
     - !<own> e42bbb9f-e951-4432-be2e-3cc712b1fc33
   Components:
     []
+- !<ColliderComponent/34b04fbb-3b0f-4856-ae8c-98e1b834531d>
+  PrefabRemaps:
+    []
+  Name: Physics Collider
+  Enabled: true
+  Shape: !<Mesh>
+    Mesh: !<reference> caaafd74-385c-442a-8f4a-5948d42996eb
+    Convex: false
+    Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  Matter: !<reference> 00000000-0000-0000-0000-000000000000
+  Filter: !<reference> 00000000-0000-0000-0000-000000000000
+  OverlapFilter: !<reference> 00000000-0000-0000-0000-000000000000
+  WorldSettings: !<reference> 00000000-0000-0000-0000-000000000000
+  EnableSmoothing: false
+  PositionTension: 30.000000
+  RotationTension: 30.000000
+  ForceCompound: false
+  Intangible: false
+  ShowCollider: false
 - !<RenderMeshVisual/35501b69-b651-41e6-9b64-72a252df8105>
   PrefabRemaps:
     []
@@ -864,6 +899,21 @@
     HasSegmentScaleCompensation: false
   Children:
     - !<own> 264571d0-f879-411b-8deb-ff6d9921317f
+  Components:
+    []
+- !<SceneObject/3acfa198-6342-4845-8eb0-ce3afb65639c>
+  PrefabRemaps:
+    []
+  Name: Sketchfab_model
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: -90.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> a32eae56-151d-4d33-9d9e-dd3430cbecdd
   Components:
     []
 - !<SceneObject/3b4f5057-b516-4d3b-9c8d-14c81af2f505>
@@ -939,6 +989,41 @@
     HasSegmentScaleCompensation: false
   Children:
     []
+  Components:
+    []
+- !<RenderMeshVisual/4432b001-a403-4c51-a72b-c09a5604e680>
+  PrefabRemaps:
+    []
+  Name: Object_0
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 74bc0e94-cc42-477f-b341-e0062f561d85
+  Mesh: !<reference> caaafd74-385c-442a-8f4a-5948d42996eb
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/467ce288-308f-442f-8134-15cf360fd7f6>
+  PrefabRemaps:
+    []
+  Name: Maqueta3D
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: -43.700001, z: -300.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> c39934d1-3989-48d7-ba23-129f97b5ce64
   Components:
     []
 - !<SceneObject/46b79537-a269-46f1-9483-500d7a4170d6>
@@ -1410,6 +1495,21 @@
     - !<own> 3b4f5057-b516-4d3b-9c8d-14c81af2f505
   Components:
     []
+- !<SceneObject/7bf1624b-6a1b-4a1f-a99b-f5f01fc0ecfd>
+  PrefabRemaps:
+    []
+  Name: BotonMaqueta
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: -141.699997, z: -262.000000}
+    Rotation: {x: -50.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 00566152-4072-4189-9ed8-d82056dfa1ee
 - !<SceneObject/7e2075c6-0882-4275-8365-16a03da73298>
   PrefabRemaps:
     []
@@ -1739,6 +1839,21 @@
     []
   Components:
     - !<own> 17246ac6-4ad3-42a8-bbb3-3ac3ac42bf04
+- !<SceneObject/a32eae56-151d-4d33-9d9e-dd3430cbecdd>
+  PrefabRemaps:
+    []
+  Name: maqueta viciana vila-real.stl.cleaner.materialmerger.gles
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> cd4262d0-8b42-4dc2-ac37-d26b352a2f9d
+  Components:
+    []
 - !<SceneObject/a4b1ce71-4840-4493-bc52-58f3c13933e1>
   PrefabRemaps:
     []
@@ -2058,6 +2173,57 @@
     []
   Components:
     []
+- !<SceneObject/c1957836-1e04-4c3f-b5a2-b3617435531e>
+  PrefabRemaps:
+    []
+  Name: Sketchfab_Scene
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 3acfa198-6342-4845-8eb0-ce3afb65639c
+  Components:
+    []
+- !<SceneObject/c39934d1-3989-48d7-ba23-129f97b5ce64>
+  PrefabRemaps:
+    - 3acfa198-6342-4845-8eb0-ce3afb65639c: da48fc17-19d7-4389-47e6-5b0981c0c44a
+    - 4432b001-a403-4c51-a72b-c09a5604e680: 2e2f1296-73d3-4a4d-49c7-e4d036377911
+    - a32eae56-151d-4d33-9d9e-dd3430cbecdd: 4bc9f3a9-9a9c-4fe0-69c4-5054a59f48b0
+    - c1957836-1e04-4c3f-b5a2-b3617435531e: c366fcd9-815a-4684-559d-9a693634b9c3
+    - c39934d1-3989-48d7-ba23-129f97b5ce64: 573cd1af-8147-46c8-6f0a-1f3f78b0ffd6
+    - c81d773d-0bb8-4a7f-8c95-2fa3ef865e99: 5510ed79-69e7-421d-4742-cb30eefdae9f
+    - cd4262d0-8b42-4dc2-ac37-d26b352a2f9d: c1841105-b815-4aee-5563-8819b0034822
+  Name: Maqueta
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: -13.072000, y: -19.565001, z: 304.740997}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 4.300000, y: 4.300000, z: 4.300000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> c81d773d-0bb8-4a7f-8c95-2fa3ef865e99
+  Components:
+    []
+- !<SceneObject/c81d773d-0bb8-4a7f-8c95-2fa3ef865e99>
+  PrefabRemaps:
+    []
+  Name: Scenes
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> c1957836-1e04-4c3f-b5a2-b3617435531e
+  Components:
+    []
 - !<ScriptComponent/c8e031d3-a8a1-468a-a419-427f8556de4c>
   PrefabRemaps:
     []
@@ -2156,6 +2322,22 @@
     index-2: !<reference> 2dae2a27-8ce6-466a-8bff-622195c1b3a8
     thumb-3_end_end_end_end: !<reference> bf2095b6-c6f8-48c8-b840-e0a6cec0dc99
     wrist_to_pinky: !<reference> 3b4f5057-b516-4d3b-9c8d-14c81af2f505
+- !<SceneObject/cd4262d0-8b42-4dc2-ac37-d26b352a2f9d>
+  PrefabRemaps:
+    []
+  Name: Object_2
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 4432b001-a403-4c51-a72b-c09a5604e680
+    - !<own> 34b04fbb-3b0f-4856-ae8c-98e1b834531d
 - !<SceneObject/ce2213a1-7aa1-4201-a3c7-c2aaa06fd4ff>
   PrefabRemaps:
     []
