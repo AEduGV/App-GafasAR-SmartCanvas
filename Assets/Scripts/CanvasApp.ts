@@ -214,6 +214,8 @@ interface Press {
   start: vec2
   last: vec2
   dragged: boolean
+  /** Mueve un sticker propio dentro del canvas de otra persona: solo se arrastra, un toque no hace nada. */
+  ownedSticker?: boolean
   drag?: CanvasDrag
   resize?: {grab: BorderGrab; from: Bounds}
   eraseRay?: {origin: vec3; dir: vec3}
@@ -1141,7 +1143,8 @@ export class CanvasApp extends BaseScriptComponent {
     const i = canvas.spawnIndex++
     const x = b.maxX - 3 - size / 2 - Math.floor(i / perColumn) * step
     const y = top - size / 2 - (i % perColumn) * step
-    canvas.doc.add({kind: def.kind ?? "shape", shape: def.shape, x, y, w: size, h: size, layer: 0, text: "", color: def.color})
+    const el = canvas.doc.add({kind: def.kind ?? "shape", shape: def.shape, x, y, w: size, h: size, layer: 0, text: "", color: def.color})
+    canvas.userStickers.add(el.id)
     this.dock.setStatus("Sticker added to " + canvas.owner?.name + "'s canvas")
     this.log("sticker " + name + " en " + canvas.id)
   }
@@ -2235,7 +2238,18 @@ export class CanvasApp extends BaseScriptComponent {
       this.startCanvasOutside(interactor)
       return
     }
-    // El canvas de otra persona no se puede tocar.
+    // El canvas de otra persona no se puede tocar, salvo para arrastrar los stickers que haya puesto el usuario.
+    if ("canvas" in resolved && resolved.canvas.owner && resolved.hit.type === "element" && resolved.canvas.userStickers.has(resolved.hit.id)) {
+      const canvas = resolved.canvas
+      const el = canvas.doc.elements.get(resolved.hit.id)
+      if (!el) return
+      this.links.select(null)
+      this.activate(canvas)
+      const z = elementZ(el)
+      const p = this.canvasPoint(interactor, z) ?? new vec2(el.x, el.y)
+      this.press = {interactor, mode: "move", id: el.id, planeZ: z, start: p, last: p, dragged: false, ownedSticker: true}
+      return
+    }
     if ("canvas" in resolved && resolved.canvas.owner) {
       const owner = resolved.canvas.owner.name
       this.dock.setStatus(resolved.canvas.busy ? owner + " is working on this canvas" : "This canvas belongs to " + owner + ": only its creator can edit it")
@@ -2370,7 +2384,7 @@ export class CanvasApp extends BaseScriptComponent {
       }
       case "move":
         if (press.dragged && press.id) this.endMove(press.id)
-        else if (press.id) this.tapElement(press.id)
+        else if (press.id && !press.ownedSticker) this.tapElement(press.id)
         break
       case "connection":
         this.selectConnection(press.id)

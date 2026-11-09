@@ -22,6 +22,8 @@ export class CanvasInstance {
   spawnIndex = 0
   // En el canvas de otra persona, el único botón: añadir stickers (como comentarios).
   stickerButton: SceneObject | null = null
+  // Stickers que el usuario ha puesto en este canvas ajeno: son lo único de él que puede mover.
+  readonly userStickers = new Set<string>()
   activeLayer = 0
   bar: CanvasEdgeBarUI | null = null
   barBounds: Bounds | null = null
