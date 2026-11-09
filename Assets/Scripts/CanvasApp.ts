@@ -2413,7 +2413,7 @@ export class CanvasApp extends BaseScriptComponent {
   private update(): void {
     flushRetired()
     this.updateLinkButtons()
-    this.handwriting.update(this.drawing ? this.active : null)
+    this.handwriting.update(this.drawing ? this.active : null, this.active)
     this.updateCollaborator()
     this.tickRipples()
     this.commitUndoStates()

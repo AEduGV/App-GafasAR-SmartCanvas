@@ -166,6 +166,8 @@ function overlaps(a: StrokeBounds, b: StrokeBounds, gap: number): boolean {
 export class HandwritingAssist {
   private states = new Map<CanvasInstance, WatchState>()
   private failedNotice = false
+  // El canvas seleccionado: el aviso de convertir solo se ve en él.
+  private selected: CanvasInstance | null = null
 
   constructor(
     private readonly onConvert: (canvas: CanvasInstance, ids: string[], text: string, bounds: StrokeBounds) => void,
@@ -202,9 +204,12 @@ export class HandwritingAssist {
     this.states.delete(canvas)
   }
 
-  update(drawingOn: CanvasInstance | null): void {
+  /** `selected`: al seleccionar otro canvas, el aviso de convertir del anterior desaparece. */
+  update(drawingOn: CanvasInstance | null, selected: CanvasInstance | null): void {
     const now = getTime()
+    this.selected = selected
     this.states.forEach((st, canvas) => {
+      if (st.suggestion && canvas !== selected) this.hide(st)
       st.pending.forEach((id) => {
         if (!canvas.doc.elements.has(id)) st.pending.delete(id)
       })
@@ -268,6 +273,8 @@ export class HandwritingAssist {
 
   private show(canvas: CanvasInstance, st: WatchState, ids: string[], text: string): void {
     this.hide(st)
+    // Si mientras tanto se ha seleccionado otro canvas, el aviso ya no tiene sentido.
+    if (canvas !== this.selected) return
     const flat = text.replace(/\s+/g, " ")
     const label = "Convert to text: " + (flat.length > LABEL_MAX ? flat.slice(0, LABEL_MAX - 1) + "…" : flat)
     const width = label.length * BUTTON_CHAR_W + 3
