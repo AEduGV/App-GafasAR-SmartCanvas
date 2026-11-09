@@ -53,7 +53,11 @@ export class CanvasRipples {
 
 export type AlignSide = "left" | "right" | "top" | "bottom"
 
-const GLOW_WIDTH = 0.5 // cm
+// Sutil, a petición del usuario (2026-11-09): línea fina y translúcida, ondas tenues.
+const GLOW_WIDTH = 0.25 // cm
+const GLOW_ALPHA_MIN = 0.2
+const GLOW_ALPHA_MAX = 0.45
+const WAVE_ALPHA = 0.3
 const GLOW_REACH = 3 // cm que recorren las ondas hacia fuera
 const GLOW_PERIOD = 0.9
 
@@ -78,7 +82,7 @@ export class EdgeGlow {
     else if (side === "left") [this.a, this.b, this.out] = [new vec2(minX, minY), new vec2(minX, maxY), new vec2(-1, 0)]
     else if (side === "top") [this.a, this.b, this.out] = [new vec2(minX, maxY), new vec2(maxX, maxY), new vec2(0, 1)]
     else [this.a, this.b, this.out] = [new vec2(minX, minY), new vec2(maxX, minY), new vec2(0, -1)]
-    this.line = new MeshSlot(this.root, "Line", withAlpha(COLOR.primary, 1), false)
+    this.line = new MeshSlot(this.root, "Line", withAlpha(COLOR.primary, GLOW_ALPHA_MAX), false)
     appendStroke(this.line.begin(), [this.a, this.b], false, GLOW_WIDTH / scale, Z)
     this.line.commit()
     for (let i = 0; i < 2; i++) this.waves.push(new MeshSlot(this.root, "Wave" + i, withAlpha(COLOR.primary, 0), false))
@@ -87,14 +91,15 @@ export class EdgeGlow {
 
   update(): void {
     const t = (getTime() - this.start) / GLOW_PERIOD
-    this.line.setColor(withAlpha(COLOR.primary, 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2))))
+    const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2)
+    this.line.setColor(withAlpha(COLOR.primary, GLOW_ALPHA_MIN + (GLOW_ALPHA_MAX - GLOW_ALPHA_MIN) * pulse))
     this.waves.forEach((w, i) => {
       const phase = (t + i / this.waves.length) % 1
       const d = (phase * GLOW_REACH) / this.scale
       const off = this.out.uniformScale(d)
       appendStroke(w.begin(), [this.a.add(off), this.b.add(off)], false, (GLOW_WIDTH * 0.6) / this.scale, Z)
       w.commit()
-      w.setColor(withAlpha(COLOR.primary, 0.7 * Math.min(1, phase * 6) * (1 - phase)))
+      w.setColor(withAlpha(COLOR.primary, WAVE_ALPHA * Math.min(1, phase * 6) * (1 - phase)))
     })
   }
 
