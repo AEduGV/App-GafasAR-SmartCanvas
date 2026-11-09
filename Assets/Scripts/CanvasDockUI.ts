@@ -43,11 +43,11 @@ const ICON_W = ROUND
 // Anchura de la columna del menú: solo lleva iconos.
 const COLUMN_W = ROUND
 // Hueco entre botones: con los dedos es fácil pulsar el de al lado si están pegados.
-const GAP = 1
+const GAP = 1.8
 const PAD = 1
 
-const BUTTON_SIZE = 47
-const STATUS_SIZE = 49
+const BUTTON_SIZE = 56
+const STATUS_SIZE = 58
 
 // Lo más cerca posible sin molestar, para que ningún canvas se interponga. Las medidas de este archivo
 // son las de un panel a VIEW_REFERENCE cm, y se escalan para verse igual de grandes a esta distancia.
@@ -58,12 +58,12 @@ const VIEW_REFERENCE = 105
 const TOGGLE_SIZE = ROUND
 const TOGGLE_X = -27
 const TOGGLE_Y = 31
-const STATUS_H = 4
+const STATUS_H = 4.6
 const STATUS_LEFT = TOGGLE_X + TOGGLE_SIZE / 2 + 0.6
 const STATUS_MAX_W = 29.5 - STATUS_LEFT
 const STATUS_PAD = 1.2
 // Anchura aproximada por carácter: la placa se ajusta al mensaje para tapar lo menos posible.
-const STATUS_CHAR_W = 0.6
+const STATUS_CHAR_W = 0.7
 const MENU_TOP = TOGGLE_Y - TOGGLE_SIZE / 2 - 0.8
 // Borde izquierdo de la franja visible: la barra baja pegada a él.
 const MENU_LEFT = -29.5
@@ -117,7 +117,7 @@ const PANELS: Record<string, InfoPanel> = {
   },
 }
 
-const PANEL_W = 22
+const PANEL_W = 26
 
 // Opciones que despliega Guardar, a su derecha.
 const SAVE_OPTIONS: ButtonDef[] = [
@@ -125,11 +125,11 @@ const SAVE_OPTIONS: ButtonDef[] = [
   {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
 ]
 const PANEL_GAP = 1
-const PANEL_BTN_H = 3.2
-const PANEL_LINE_H = 2.6
-const PANEL_TITLE_H = 3.6
-const PANEL_TITLE_SIZE = 62
-const PANEL_TEXT_SIZE = 46
+const PANEL_BTN_H = 3.8
+const PANEL_LINE_H = 3
+const PANEL_TITLE_H = 4.2
+const PANEL_TITLE_SIZE = 72
+const PANEL_TEXT_SIZE = 54
 
 const PLACEMENT: ButtonDef[] = [
   {label: "Horizontal", action: "orient:h", icon: ICON.crop_landscape},
@@ -390,7 +390,8 @@ export class CanvasDockUI extends BaseScriptComponent {
     }
     text(def.title, PANEL_TITLE_SIZE, PANEL_TITLE_H, COLOR.text)
     for (const line of def.lines) text(line, PANEL_TEXT_SIZE, PANEL_LINE_H, COLOR.textMuted)
-    y -= GAP * 2
+    // Con el hueco entre botones ya grande, basta uno para separar el texto de los botones.
+    y -= GAP
     for (const item of def.buttons) {
       const isSession = item === SESSION_BUTTON
       const label = isSession ? (this.sharedSession ? "Cerrar sesión compartida" : "Iniciar sesión compartida") : item
