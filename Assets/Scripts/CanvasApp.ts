@@ -295,6 +295,8 @@ export class CanvasApp extends BaseScriptComponent {
   // `until`: al pegarse arrastrando, las ondas duran un momento; con la miniatura, mientras dure el contacto (null).
   // Canvas cuyos botones están creciendo al aparecer, con el momento en que empezaron.
   private buttonsAppear = new Map<CanvasInstance, number>()
+  // Rayos físicos contra los objetos 3D de la escena (las flechas al entorno los reconocen).
+  private physicsProbe: Probe | null = null
   // Brillo en el lado del canvas al que se pegaría el que se está arrastrando.
   private alignGlow: {canvas: CanvasInstance; side: AlignSide; fx: EdgeGlow} | null = null
   private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation | null; until: number | null} | null = null
@@ -2680,6 +2682,8 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private addWorldArrow(canvas: CanvasInstance, origin: vec3, dir: vec3): void {
+    // Un objeto 3D de la escena con colisionador (la maqueta, por ejemplo) delante de la sala tiene prioridad.
+    const objectHit = this.sceneObjectHit(origin, dir)
     const place = (point: vec3) => {
       if (!this.canvases.includes(canvas)) return
       this.links.addToPoint(canvas, point)
@@ -2688,12 +2692,34 @@ export class CanvasApp extends BaseScriptComponent {
     }
     const fallback = origin.add(dir.uniformScale(WORLD_ARROW_FALLBACK))
     if (!this.hitSession) {
-      place(fallback)
+      place(objectHit ?? fallback)
       return
     }
     this.hitSession.hitTest(origin, origin.add(dir.uniformScale(WORLD_ARROW_REACH)), (result) => {
-      place(result ? result.position : fallback)
+      const surface = result ? result.position : null
+      if (objectHit && (!surface || objectHit.distance(origin) <= surface.distance(origin))) place(objectHit)
+      else place(surface ?? objectHit ?? fallback)
     })
+  }
+
+  /**
+   * El punto más cercano en el que el rayo toca un objeto 3D de la escena (con colisionador) que no sea de la propia
+   * app: ni canvas ni sus botones, ni el menú pegado a la vista ni SIK. La sala real la detecta `hitTest` aparte.
+   */
+  private sceneObjectHit(origin: vec3, dir: vec3): vec3 | null {
+    if (!this.physicsProbe) this.physicsProbe = Physics.createGlobalProbe()
+    const hits = this.physicsProbe.rayCastAllSync(origin, origin.add(dir.uniformScale(WORLD_ARROW_REACH)))
+    const camera = this.camera.getSceneObject()
+    for (const hit of hits) {
+      let so: SceneObject | null = hit.collider ? hit.collider.getSceneObject() : null
+      let ours = !so
+      while (so && !ours) {
+        if (so === this.sceneObject || so === camera || so.name === "SpectaclesInteractionKit") ours = true
+        so = so.getParent()
+      }
+      if (!ours) return hit.position
+    }
+    return null
   }
 
   private elementAtPointer(interactor: Interactor, exclude: string): string | null {
