@@ -66,7 +66,11 @@ export class CanvasLibrary {
   readonly size: vec2
 
   /** `left`: se pega al lado izquierdo del canvas en vez de al derecho (en el de Ana, a su derecha está ella). */
-  constructor(parent: SceneObject, readonly kind: LibraryKind, onPick: (action: string) => void, private left: boolean = false) {
+  /**
+   * Las pulsaciones no las resuelven los botones: CanvasApp mira qué casilla hay bajo el rayo (`actionAt`). Con el ratón
+   * real, SIK a veces da la pulsación al canvas de al lado en vez de al botón, y en el de otra persona no pasaba nada.
+   */
+  constructor(parent: SceneObject, readonly kind: LibraryKind, private left: boolean = false) {
     const def = LIBRARY[kind]
     this.root = global.scene.createSceneObject("Library_" + kind)
     this.root.setParent(parent)
@@ -98,7 +102,7 @@ export class CanvasLibrary {
     def.items.forEach((item, i) => {
       const col = i % COLUMNS
       const row = Math.floor(i / COLUMNS)
-      const btn = makePill(this.root, item.label, BTN, BTN, 56, () => false, () => onPick(item.action), item.icon)
+      const btn = makePill(this.root, item.label, BTN, BTN, 56, () => false, () => {}, item.icon)
       addPillEdge(btn)
       btn.getSceneObject().getTransform().setLocalPosition(
         new vec3(PAD + BTN / 2 + col * (BTN + GAP), -PAD - TITLE_H - BTN / 2 - row * (BTN + GAP), 0.2)
@@ -119,6 +123,20 @@ export class CanvasLibrary {
   contains(p: vec2, b: Bounds): boolean {
     const left = this.leftEdge(b)
     return p.x >= left && p.x <= left + this.size.x && p.y <= b.maxY && p.y >= b.maxY - this.size.y
+  }
+
+  /** La acción de la casilla en la que cae un punto del canvas, o null si cae en un hueco o fuera. */
+  actionAt(p: vec2, b: Bounds): string | null {
+    if (!this.contains(p, b)) return null
+    const def = LIBRARY[this.kind]
+    const x = p.x - this.leftEdge(b) - PAD
+    const y = b.maxY - p.y - PAD - TITLE_H
+    if (x < 0 || y < 0) return null
+    const col = Math.floor(x / (BTN + GAP))
+    const row = Math.floor(y / (BTN + GAP))
+    // Dentro de la celda pero en el hueco entre botones, no cuenta.
+    if (col >= COLUMNS || x - col * (BTN + GAP) > BTN || y - row * (BTN + GAP) > BTN) return null
+    return def.items[row * COLUMNS + col]?.action ?? null
   }
 
   destroy(): void {

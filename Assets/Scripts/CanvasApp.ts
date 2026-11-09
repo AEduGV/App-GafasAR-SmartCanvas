@@ -1949,16 +1949,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.dock.setStatus(this.toolHint())
       return
     }
-    const panel = new CanvasLibrary(canvas.root, kind, (action) => {
-      const [verb, arg] = action.split(":")
-      if (canvas.owner) {
-        this.addStickerToOwned(canvas, arg)
-        return
-      }
-      this.activate(canvas)
-      if (verb === "shape") this.addElement("shape", arg as ShapeKind)
-      else this.addSticker(arg)
-    }, !!canvas.owner)
+    const panel = new CanvasLibrary(canvas.root, kind, !!canvas.owner)
     panel.place(canvas.renderer.getBounds())
     this.library = {canvas, panel}
     this.dock.setStatus(kind === "shapes" ? "Pick a shape to add. Tap outside to close" : "Pick a sticker to add. Tap outside to close")
@@ -1969,6 +1960,30 @@ export class CanvasApp extends BaseScriptComponent {
     if (!this.library) return false
     this.library.panel.destroy()
     this.library = null
+    return true
+  }
+
+  /** Añade lo elegido en el panel: en un canvas propio, como siempre; en el de otra persona, solo un sticker. */
+  private pickFromLibrary(canvas: CanvasInstance, action: string): void {
+    const [verb, arg] = action.split(":")
+    if (canvas.owner) {
+      if (verb === "sticker") this.addStickerToOwned(canvas, arg)
+      return
+    }
+    this.activate(canvas)
+    if (verb === "shape") this.addElement("shape", arg as ShapeKind)
+    else this.addSticker(arg)
+  }
+
+  /** Si el rayo cae en una casilla del panel abierto, añade lo que tiene. Devuelve si cayó en el panel (aunque sea un hueco). */
+  private pressLibrary(origin: vec3, dir: vec3): boolean {
+    const lib = this.library
+    if (!lib) return false
+    const p = lib.canvas.rayPoint(origin, dir, 1.4)
+    const b = lib.canvas.renderer.getBounds()
+    if (!p || !lib.panel.contains(p, b)) return false
+    const action = lib.panel.actionAt(p, b)
+    if (action) this.pickFromLibrary(lib.canvas, action)
     return true
   }
 
@@ -2183,12 +2198,13 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
 
+    // El panel de figuras o stickers se resuelve por posición, sea cual sea el objetivo que dé SIK (un botón, el canvas
+    // de al lado...). Pulsar en él, aunque sea en un hueco, nunca lo cierra ni cuenta como pulsar fuera.
+    const panelRay = this.activeRay(interactor)
+    if (panelRay && this.pressLibrary(panelRay.origin, panelRay.dir)) return
+
     let resolved = this.resolveTarget(target)
     if (target && !resolved) return // pulsación sobre un panel o un botón
-
-    // Una pulsación sobre el panel de figuras o stickers (aunque caiga entre dos botones) no lo cierra.
-    const panelRay = this.activeRay(interactor)
-    if (panelRay && this.rayHitsLibrary(panelRay.origin, panelRay.dir)) return
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
     const pressRay = this.activeRay(interactor)
