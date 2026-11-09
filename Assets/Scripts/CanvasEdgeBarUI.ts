@@ -168,6 +168,10 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
   private swatches: {so: SceneObject; angle: number; radius: number}[] = []
   private wheelOpen = false
   private wheelProgress = 0
+  // Inclinado sobre una mesa: se eleva solo lo que necesita lo desplegado para no hundirse en ella.
+  private basePosition: vec3 | null = null
+  private liftSin = 0
+  private lift = -1
 
   get onAction(): PublicApi<EdgeAction> {
     return this._onAction.publicApi()
@@ -388,6 +392,20 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       const sub = this.subRings.get(key)
       if (next === 0 && sub) sub.enabled = false
     })
+    this.applyLift()
+  }
+
+  /** Cerrado, el + se eleva como el botón Deshacer; al abrirse, sube hasta el radio de lo que se despliega. */
+  private applyLift(): void {
+    if (!this.basePosition) return
+    let sub = 0
+    this.subProgress.forEach((p) => (sub = Math.max(sub, p)))
+    const reach = Math.max(HUB_SIZE / 2, this.progress * RING_RADIUS, sub * SHAPE_RING_RADIUS, this.wheelProgress * WHEEL_REACH)
+    const lift = this.liftSin * reach
+    if (Math.abs(lift - this.lift) < 0.001) return
+    this.lift = lift
+    const b = this.basePosition
+    this.sceneObject.getTransform().setLocalPosition(new vec3(b.x, b.y, b.z + lift))
   }
 
   private showsPlus(): boolean {
@@ -452,9 +470,12 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
     })
   }
 
-  setPose(position: vec3, rotation: quat): void {
-    const t = this.sceneObject.getTransform()
-    t.setLocalPosition(position)
-    t.setLocalRotation(rotation)
+  /** `liftSin`: seno de la inclinación sobre una mesa (0 en una pared); la altura extra la calcula `applyLift`. */
+  setPose(position: vec3, rotation: quat, liftSin: number = 0): void {
+    this.basePosition = position
+    this.liftSin = liftSin
+    this.lift = -1
+    this.sceneObject.getTransform().setLocalRotation(rotation)
+    this.applyLift()
   }
 }

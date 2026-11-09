@@ -5,7 +5,7 @@ import {Interactor, InteractorInputType} from "SpectaclesInteractionKit.lspkg/Co
 import WorldCameraFinderProvider from "SpectaclesInteractionKit.lspkg/Providers/CameraProvider/WorldCameraFinderProvider"
 import SIK from "SpectaclesInteractionKit.lspkg/SIK"
 import {CanvasDockUI} from "./CanvasDockUI"
-import {CanvasEdgeBarUI, EdgeAction, EdgeTool, RING_RADIUS} from "./CanvasEdgeBarUI"
+import {CanvasEdgeBarUI, EdgeAction, EdgeTool} from "./CanvasEdgeBarUI"
 import {CanvasDocument, CanvasElement, ElementKind, LAYER_COUNT, ShapeKind} from "./CanvasDocument"
 import {ICON} from "./CanvasIcons"
 import {CanvasInstance, Orientation} from "./CanvasInstance"
@@ -104,6 +104,8 @@ const BUTTONS_MAX_DISTANCE = 100
 // Esa distancia se mide hasta el cuerpo del usuario: una barra vertical desde los ojos hasta esta altura por debajo.
 const BODY_HEIGHT = 150
 const BODY_SAMPLES = 7
+// Duración (s) de las ondas al pegarse un canvas a otra superficie arrastrándolo.
+const RIPPLE_FLASH = 1.4
 const MAX_SCALE = 3
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
 const STICK_DELAY = 0.15
@@ -208,6 +210,8 @@ interface CanvasDrag {
   moved: boolean
   ball: {start: number; fullScale: number; miniScale: number; from: vec3; fromRotation: quat; distance: number; origin: vec3; dir: vec3; travelled: boolean} | null
   surface: SurfaceHit | null
+  /** Escala y distancia al usuario al empezar: al pegarse a otra superficie se ve del mismo tamaño que entonces. */
+  startView: {scale: number; distance: number}
 }
 
 /** El botón que une o separa una pareja de canvas cercanos. */
@@ -246,7 +250,8 @@ export class CanvasApp extends BaseScriptComponent {
   // Panel con todas las figuras o stickers, abierto desde el «…» del menú radial de un canvas.
   private library: {canvas: CanvasInstance; panel: CanvasLibrary} | null = null
   // Ondas en la miniatura agarrada mientras, al soltarla, se pegaría a la pared o mesa apuntada.
-  private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation} | null = null
+  // `until`: al pegarse arrastrando, las ondas duran un momento; con la miniatura, mientras dure el contacto (null).
+  private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation | null; until: number | null} | null = null
   // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
   private collaborator: {
     mannequin: CanvasMannequin
@@ -1187,7 +1192,7 @@ export class CanvasApp extends BaseScriptComponent {
       canvas.bar.setPose(new vec3(hub.x, hub.y, 1.4), quat.quatIdentity())
     } else {
       const tilt = (MENU_TILT * Math.PI) / 180
-      canvas.bar.setPose(new vec3(hub.x, hub.y, 1 + RING_RADIUS * Math.sin(tilt)), quat.angleAxis(tilt, vec3.right()))
+      canvas.bar.setPose(new vec3(hub.x, hub.y, 1), quat.angleAxis(tilt, vec3.right()), Math.sin(tilt))
     }
     const t = canvas.undoButton?.getTransform()
     if (!t) return
@@ -1296,6 +1301,7 @@ export class CanvasApp extends BaseScriptComponent {
         moved: false,
         ball: null,
         surface: null,
+        startView: {scale: anchor.scale, distance: hit.distance(this.camera.getWorldPosition())},
       },
     }
   }
@@ -1394,10 +1400,24 @@ export class CanvasApp extends BaseScriptComponent {
     }
     if (!this.ripples) {
       const fx = new CanvasRipples(canvas.root, canvas.renderer.outlinePoints(), canvas.renderer.getBounds())
-      this.ripples = {canvas, fx, orientation}
+      this.ripples = {canvas, fx, orientation, until: null}
       this.dock.setStatus(orientation === "vertical" ? "Tocando la pared: suelta para pegarlo" : "Tocando la mesa: suelta para dejarlo encima")
     }
     this.ripples.fx.update()
+  }
+
+  /** Ondas breves al pegarse un canvas a otra superficie arrastrándolo. */
+  private flashRipples(canvas: CanvasInstance): void {
+    this.clearRipples()
+    const fx = new CanvasRipples(canvas.root, canvas.renderer.outlinePoints(), canvas.renderer.getBounds())
+    this.ripples = {canvas, fx, orientation: null, until: getTime() + RIPPLE_FLASH}
+  }
+
+  private tickRipples(): void {
+    const r = this.ripples
+    if (!r || r.until === null) return
+    if (getTime() >= r.until) this.clearRipples()
+    else r.fx.update()
   }
 
   private clearRipples(): void {
@@ -1482,7 +1502,8 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Exige unos instantes apuntando a la superficie para que rozar un borde no haga girar el canvas. */
   private onDragSurface(drag: CanvasDrag, result: WorldQueryHitTestResult | null): void {
-    const frame = result ? this.surfaceFrame(result.position, result.normal) : null
+    // Igual que al soltar la miniatura: solo se pega a una superficie a 1,5 m o menos del cuerpo.
+    const frame = result && !this.isFarSurface(result.position) ? this.surfaceFrame(result.position, result.normal) : null
     if (!result || !frame || frame.normal.dot(drag.planeNormal) > SAME_SURFACE_DOT) {
       drag.candidate = null
       return
@@ -1507,11 +1528,13 @@ export class CanvasApp extends BaseScriptComponent {
       fromRotation: drag.rotation,
       toRotation: quat.lookAt(frame.normal, frame.up),
       fromScale: drag.scale,
-      // Solo estirar los bordes cambia el tamaño: al pegarse a otra superficie conserva su escala.
-      toScale: drag.scale,
+      // Se ve del mismo tamaño que al empezar a arrastrarlo, aunque la superficie esté más lejos o más cerca.
+      toScale: Math.max(MIN_SCALE, Math.min(MAX_SCALE,
+        (drag.startView.scale * point.distance(this.camera.getWorldPosition())) / Math.max(1, drag.startView.distance))),
       start: getTime(),
     }
     for (const m of drag.members) m.canvas.orientation = frame.orientation
+    this.flashRipples(drag.members[0].canvas)
     this.dock.setStatus(frame.orientation === "vertical" ? "Pegado a la pared" : "Pegado a la mesa")
     this.log("canvas " + drag.members[0].canvas.id + " pasa a " + frame.orientation)
   }
@@ -2106,6 +2129,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.updateLinkButtons()
     this.handwriting.update(this.drawing ? this.active : null)
     this.updateCollaborator()
+    this.tickRipples()
     this.commitUndoStates()
     this.updateDeleteState()
     this.updateFlip()
