@@ -2385,6 +2385,7 @@ export class CanvasApp extends BaseScriptComponent {
       case "move":
         if (press.dragged && press.id) this.endMove(press.id)
         else if (press.id && !press.ownedSticker) this.tapElement(press.id)
+        else if (press.id) this.tapOwnedSticker(press.id)
         break
       case "connection":
         this.selectConnection(press.id)
@@ -2535,6 +2536,17 @@ export class CanvasApp extends BaseScriptComponent {
     this.selectedConn = null
     this.selectWithGroup(id)
     this.publishSelection()
+  }
+
+  /** En el canvas de otra persona, un toque en un post-it propio abre la escritura; los demás stickers solo se mueven. */
+  private tapOwnedSticker(id: string): void {
+    const el = this.doc.elements.get(id)
+    if (!el || el.kind !== "note") return
+    this.selectedConn = null
+    this.selection.clear()
+    this.selection.add(id)
+    this.publishSelection()
+    this.beginEditing()
   }
 
   private tapElement(id: string): void {
