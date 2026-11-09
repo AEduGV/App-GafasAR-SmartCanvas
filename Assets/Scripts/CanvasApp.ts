@@ -120,6 +120,8 @@ const MAX_DRAG_DISTANCE = 600
 // Mantener pulsado el interior sin mover la mano encoge el canvas a una miniatura que se lleva en los dedos.
 const HOLD_TIME = 0.5
 const HOLD_STILL_DOT = 0.9999 // unos 0,8 grados: por debajo, es un toque y el canvas no se mueve
+// Con la miniatura agarrada, desplazarse esto (cm) también cuenta como llevarla a otro sitio.
+const CARRY_WALK_DISTANCE = 5
 // Agarrado, el canvas se encoge a una miniatura de sí mismo de este tamaño (cm, su lado mayor).
 const MINI_SIZE = 7
 const BALL_TIME = 0.18
@@ -208,7 +210,7 @@ interface CanvasDrag {
   startDir: vec3
   /** Ya se movió: mantener pulsado dejó de ser un agarre. */
   moved: boolean
-  ball: {start: number; fullScale: number; miniScale: number; from: vec3; fromRotation: quat; distance: number; origin: vec3; dir: vec3; travelled: boolean} | null
+  ball: {start: number; fullScale: number; miniScale: number; from: vec3; fromRotation: quat; distance: number; origin: vec3; startOrigin: vec3; dir: vec3; travelled: boolean} | null
   surface: SurfaceHit | null
   /** Escala y distancia al usuario al empezar: al pegarse a otra superficie se ve del mismo tamaño que entonces. */
   startView: {scale: number; distance: number}
@@ -1349,7 +1351,7 @@ export class CanvasApp extends BaseScriptComponent {
     const miniScale = MINI_SIZE / Math.max(b.maxX - b.minX, b.maxY - b.minY)
     drag.ball = {
       start: getTime(), fullScale, miniScale, from, fromRotation: drag.rotation,
-      distance: from.distance(eye), origin: eye, dir: this.camera.back, travelled: false,
+      distance: from.distance(eye), origin: eye, startOrigin: eye, dir: this.camera.back, travelled: false,
     }
     this.closeEdgeMenu()
     this.dock.setStatus("Lleva el canvas adonde quieras y suelta para colocarlo")
@@ -1361,7 +1363,8 @@ export class CanvasApp extends BaseScriptComponent {
     if (!ball) return
     ball.origin = origin
     ball.dir = dir
-    if (dir.dot(drag.startDir) < HOLD_STILL_DOT) ball.travelled = true
+    // Cuenta como llevarlo a otro sitio girar la mano o caminar con él (acercarse a una pared sin girar la vista).
+    if (dir.dot(drag.startDir) < HOLD_STILL_DOT || origin.distance(ball.startOrigin) > CARRY_WALK_DISTANCE) ball.travelled = true
     // Nunca atraviesa la superficie que tiene delante.
     let distance = FLOATING_DISTANCE
     const hit = drag.surface
