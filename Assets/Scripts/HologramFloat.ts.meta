@@ -1,0 +1,52 @@
+- !<AssetImportMetadata/55ace8c8-dfa4-4cfb-bb9b-c7bbd2d5b922>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> 9860995d-3b02-4863-94db-ce0ed0621d79
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> 9860995d-3b02-4863-94db-ce0ed0621d79
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 86a43127-861f-41a1-a269-24996ab02b79
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/86a43127-861f-41a1-a269-24996ab02b79>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  VersionPrerelease: ""
+  UpdateOrder: 0
+  ComponentUid: 6b75f93d-912e-46e5-98e4-a4feaa07bc19
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    bobHeight: false
+    bobPeriod: false
+    spinSpeed: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - bobHeight: 1.500000
+      bobPeriod: !<float> 4.000000
+      spinSpeed: !<float> 8.000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - '// @input float bobHeight = 1.5 {"hint":"Altura (cm) que sube y baja"}'
+    - '// @input float bobPeriod = 4 {"hint":"Segundos que tarda en subir y bajar"}'
+    - '// @input float spinSpeed = 8 {"hint":"Grados por segundo que gira"}'
