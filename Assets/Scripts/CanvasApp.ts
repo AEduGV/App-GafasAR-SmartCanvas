@@ -167,6 +167,20 @@ const DEFAULT_SIZE: Record<string, [number, number]> = {
 // Textos de ejemplo que se sustituyen al empezar a escribir.
 const PLACEHOLDERS = ["New note", "Text", "Screen", "Process", "Decision?", "Start", "Data", "Post-it"]
 
+// Stickers: solo la forma y el color, sin texto (a petición del usuario, 2026-11-09). El post-it es una nota vacía.
+const STICKERS: Record<string, {shape: ShapeKind; color: number; kind?: ElementKind; size?: number}> = {
+  star: {shape: "star", color: 3},
+  heart: {shape: "heart", color: 5},
+  warning: {shape: "triangle", color: 4},
+  done: {shape: "circle", color: 2},
+  postit: {shape: "rect", color: NOTE_COLOR, kind: "note", size: 11},
+  question: {shape: "circle", color: 1},
+  idea: {shape: "circle", color: 3},
+  like: {shape: "circle", color: 2},
+  urgent: {shape: "hexagon", color: 4},
+  stop: {shape: "octagon", color: 5, size: 8},
+}
+
 const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
   process: "Process",
   decision: "Decision?",
@@ -1019,6 +1033,7 @@ export class CanvasApp extends BaseScriptComponent {
     canvas.renderer.setContentVisible(true)
     canvas.renderer.setOwned(true)
     this.makeOwnerTag(canvas)
+    this.makeStickerButton(canvas)
 
     // La plantilla se prepara aparte y se pasa al canvas pieza a pieza, como si la fuera dibujando.
     const draft = new CanvasDocument()
@@ -1072,6 +1087,39 @@ export class CanvasApp extends BaseScriptComponent {
     t.verticalAlignment = VerticalAlignment.Center
     t.horizontalOverflow = HorizontalOverflow.Overflow
     t.layoutRect = Rect.create(0, w, -h / 2, h / 2)
+  }
+
+  /** El único botón en el canvas de otra persona, donde va el + en los propios: abre el panel de stickers. */
+  private makeStickerButton(canvas: CanvasInstance): void {
+    const holder = global.scene.createSceneObject("StickerButton")
+    holder.setParent(canvas.root)
+    holder.createComponent("Component.Canvas")
+    const hub = canvas.hubPoint
+    holder.getTransform().setLocalPosition(new vec3(hub.x, hub.y, 1.4))
+    const btn = makePill(holder, "Add a sticker", UNDO_SIZE, UNDO_SIZE, 56, () => this.library?.canvas === canvas, () => this.toggleLibrary(canvas, "stickers"), ICON.kid_star)
+    addPillEdge(btn)
+    holder.enabled = false
+    canvas.stickerButton = holder
+  }
+
+  /**
+   * Un sticker en el canvas de otra persona, a modo de comentario: se coloca en columnas junto al borde derecho,
+   * bajo el botón, sin tocar lo que ella dibuja. No se selecciona porque ese canvas no se puede editar.
+   */
+  private addStickerToOwned(canvas: CanvasInstance, name: string): void {
+    const def = STICKERS[name]
+    if (!def) return
+    const size = def.size ?? 7
+    const b = canvas.renderer.getBounds()
+    const step = size + 1.5
+    const top = b.maxY - 9
+    const perColumn = Math.max(1, Math.floor((top - b.minY - 2) / step))
+    const i = canvas.spawnIndex++
+    const x = b.maxX - 3 - size / 2 - Math.floor(i / perColumn) * step
+    const y = top - size / 2 - (i % perColumn) * step
+    canvas.doc.add({kind: def.kind ?? "shape", shape: def.shape, x, y, w: size, h: size, layer: 0, text: "", color: def.color})
+    this.dock.setStatus("Sticker added to " + canvas.owner?.name + "'s canvas")
+    this.log("sticker " + name + " en " + canvas.id)
   }
 
   /** Cada cierto tiempo, Ana añade la siguiente pieza de la plantilla y la señala mientras la dibuja. */
@@ -1171,6 +1219,18 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Los botones solo en el canvas seleccionado y si está cerca; si se ocultan, se cierra lo que tuvieran abierto. */
   private updateButtonsVisibility(c: CanvasInstance, eye: vec3): void {
+    if (c.owner && c.stickerButton) {
+      // En un canvas ajeno no hace falta seleccionarlo (no se puede): basta con estar cerca.
+      const near = this.distanceToBody(c, eye) <= BUTTONS_MAX_DISTANCE
+      if (c.stickerButton.enabled !== near) {
+        if (!near && this.library?.canvas === c) this.closeLibrary()
+        c.stickerButton.enabled = near
+        if (near) this.buttonsAppear.set(c, getTime())
+        else this.buttonsAppear.delete(c)
+      }
+      this.animateButtonsAppear(c)
+      return
+    }
     if (!c.bar) return
     const show = c === this.active && c.placed && this.distanceToBody(c, eye) <= BUTTONS_MAX_DISTANCE
     const bar = c.bar.sceneObject
@@ -1194,15 +1254,16 @@ export class CanvasApp extends BaseScriptComponent {
   /** Al aparecer, los botones crecen desde cero con un leve rebote; al ocultarse desaparecen al instante. */
   private animateButtonsAppear(c: CanvasInstance): void {
     const start = this.buttonsAppear.get(c)
-    if (start === undefined || !c.bar) return
+    if (start === undefined) return
     const k = Math.min(1, (getTime() - start) / BUTTONS_APPEAR_TIME)
     // easeOutBack: pasa un poco de su tamaño y vuelve.
     const s1 = 1.70158
     const e = k >= 1 ? 1 : 1 + (s1 + 1) * Math.pow(k - 1, 3) + s1 * Math.pow(k - 1, 2)
     const v = Math.max(0.001, e)
     const scale = new vec3(v, v, v)
-    c.bar.sceneObject.getTransform().setLocalScale(scale)
+    c.bar?.sceneObject.getTransform().setLocalScale(scale)
     c.undoButton?.getTransform().setLocalScale(scale)
+    c.stickerButton?.getTransform().setLocalScale(scale)
     if (k >= 1) this.buttonsAppear.delete(c)
   }
 
@@ -1738,11 +1799,15 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     const panel = new CanvasLibrary(canvas.root, kind, (action) => {
-      this.activate(canvas)
       const [verb, arg] = action.split(":")
+      if (canvas.owner) {
+        this.addStickerToOwned(canvas, arg)
+        return
+      }
+      this.activate(canvas)
       if (verb === "shape") this.addElement("shape", arg as ShapeKind)
       else this.addSticker(arg)
-    })
+    }, !!canvas.owner)
     panel.place(canvas.renderer.getBounds())
     this.library = {canvas, panel}
     this.dock.setStatus(kind === "shapes" ? "Pick a shape to add. Tap outside to close" : "Pick a sticker to add. Tap outside to close")
@@ -3055,25 +3120,13 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private addSticker(name: string): void {
-    const defs: Record<string, {shape: ShapeKind; color: number; text: string; kind?: ElementKind; size?: number}> = {
-      star: {shape: "star", color: 3, text: ""},
-      heart: {shape: "heart", color: 5, text: ""},
-      warning: {shape: "triangle", color: 4, text: "!"},
-      done: {shape: "circle", color: 2, text: "OK"},
-      postit: {shape: "rect", color: NOTE_COLOR, text: "Post-it", kind: "note", size: 11},
-      question: {shape: "circle", color: 1, text: "?"},
-      idea: {shape: "circle", color: 3, text: "Idea"},
-      like: {shape: "circle", color: 2, text: "+1"},
-      urgent: {shape: "hexagon", color: 4, text: "!!"},
-      stop: {shape: "octagon", color: 5, text: "STOP", size: 8},
-    }
-    const def = defs[name]
+    const def = STICKERS[name]
     if (!def) return
     const size = def.size ?? 7
     const pos = this.nextSpawn(size, size)
     const el = this.doc.add({
       kind: def.kind ?? "shape", shape: def.shape, x: pos.x, y: pos.y, w: size, h: size,
-      layer: this.activeLayer, text: def.text, color: def.color,
+      layer: this.activeLayer, text: "", color: def.color,
     })
     this.growAround(el.id)
     this.setTool("select")

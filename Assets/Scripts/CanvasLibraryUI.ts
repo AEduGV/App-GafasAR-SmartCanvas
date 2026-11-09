@@ -65,7 +65,8 @@ export class CanvasLibrary {
   readonly root: SceneObject
   readonly size: vec2
 
-  constructor(parent: SceneObject, readonly kind: LibraryKind, onPick: (action: string) => void) {
+  /** `left`: se pega al lado izquierdo del canvas en vez de al derecho (en el de Ana, a su derecha está ella). */
+  constructor(parent: SceneObject, readonly kind: LibraryKind, onPick: (action: string) => void, private left: boolean = false) {
     const def = LIBRARY[kind]
     this.root = global.scene.createSceneObject("Library_" + kind)
     this.root.setParent(parent)
@@ -105,14 +106,18 @@ export class CanvasLibrary {
     })
   }
 
-  /** A la derecha del canvas, con el borde superior alineado con el suyo. */
+  /** Junto al canvas (a la derecha, o a la izquierda si `left`), con el borde superior alineado con el suyo. */
   place(b: Bounds): void {
-    this.root.getTransform().setLocalPosition(new vec3(b.maxX + SIDE_GAP, b.maxY, Z))
+    this.root.getTransform().setLocalPosition(new vec3(this.leftEdge(b), b.maxY, Z))
+  }
+
+  private leftEdge(b: Bounds): number {
+    return this.left ? b.minX - SIDE_GAP - this.size.x : b.maxX + SIDE_GAP
   }
 
   /** Si un punto del canvas cae dentro del panel. */
   contains(p: vec2, b: Bounds): boolean {
-    const left = b.maxX + SIDE_GAP
+    const left = this.leftEdge(b)
     return p.x >= left && p.x <= left + this.size.x && p.y <= b.maxY && p.y >= b.maxY - this.size.y
   }
 

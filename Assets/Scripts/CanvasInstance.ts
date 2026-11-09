@@ -20,6 +20,8 @@ export class CanvasInstance {
   scale = 1
   groupId: string | null = null
   spawnIndex = 0
+  // En el canvas de otra persona, el único botón: añadir stickers (como comentarios).
+  stickerButton: SceneObject | null = null
   activeLayer = 0
   bar: CanvasEdgeBarUI | null = null
   barBounds: Bounds | null = null
