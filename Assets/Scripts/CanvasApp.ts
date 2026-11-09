@@ -106,6 +106,8 @@ const BODY_HEIGHT = 150
 const BODY_SAMPLES = 7
 // Duración (s) de las ondas al pegarse un canvas a otra superficie arrastrándolo.
 const RIPPLE_FLASH = 1.4
+// Tiempo (s) que tardan los botones de un canvas en crecer al aparecer.
+const BUTTONS_APPEAR_TIME = 0.3
 const MAX_SCALE = 3
 // Al arrastrar, el canvas pasa a la superficie que se apunta si es de otra orientación.
 const STICK_DELAY = 0.15
@@ -253,6 +255,8 @@ export class CanvasApp extends BaseScriptComponent {
   private library: {canvas: CanvasInstance; panel: CanvasLibrary} | null = null
   // Ondas en la miniatura agarrada mientras, al soltarla, se pegaría a la pared o mesa apuntada.
   // `until`: al pegarse arrastrando, las ondas duran un momento; con la miniatura, mientras dure el contacto (null).
+  // Canvas cuyos botones están creciendo al aparecer, con el momento en que empezaron.
+  private buttonsAppear = new Map<CanvasInstance, number>()
   private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation | null; until: number | null} | null = null
   // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
   private collaborator: {
@@ -1170,14 +1174,36 @@ export class CanvasApp extends BaseScriptComponent {
     if (!c.bar) return
     const show = c === this.active && c.placed && this.distanceToBody(c, eye) <= BUTTONS_MAX_DISTANCE
     const bar = c.bar.sceneObject
-    if (bar.enabled === show) return
+    if (bar.enabled === show) {
+      this.animateButtonsAppear(c)
+      return
+    }
     if (!show) {
       if (this.library?.canvas === c) this.closeLibrary()
       if (this.menuCanvas === c) this.closeEdgeMenu()
       c.bar.setWheel(false)
+      this.buttonsAppear.delete(c)
+    } else {
+      this.buttonsAppear.set(c, getTime())
     }
     bar.enabled = show
     if (c.undoButton) c.undoButton.enabled = show
+    this.animateButtonsAppear(c)
+  }
+
+  /** Al aparecer, los botones crecen desde cero con un leve rebote; al ocultarse desaparecen al instante. */
+  private animateButtonsAppear(c: CanvasInstance): void {
+    const start = this.buttonsAppear.get(c)
+    if (start === undefined || !c.bar) return
+    const k = Math.min(1, (getTime() - start) / BUTTONS_APPEAR_TIME)
+    // easeOutBack: pasa un poco de su tamaño y vuelve.
+    const s1 = 1.70158
+    const e = k >= 1 ? 1 : 1 + (s1 + 1) * Math.pow(k - 1, 3) + s1 * Math.pow(k - 1, 2)
+    const v = Math.max(0.001, e)
+    const scale = new vec3(v, v, v)
+    c.bar.sceneObject.getTransform().setLocalScale(scale)
+    c.undoButton?.getTransform().setLocalScale(scale)
+    if (k >= 1) this.buttonsAppear.delete(c)
   }
 
   /** El menú va en la esquina superior derecha. En una mesa se inclina hacia el usuario y se eleva para no hundirse en ella. */
