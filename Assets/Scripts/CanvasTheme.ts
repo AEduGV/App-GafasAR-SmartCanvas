@@ -29,11 +29,13 @@ export interface ButtonTone {
   pressed: vec4
 }
 
-export const TONE: Record<"secondary" | "primary" | "warning", ButtonTone> = {
+export const TONE: Record<"secondary" | "primary" | "warning" | "danger", ButtonTone> = {
   secondary: {color: COLOR.secondary, pressed: COLOR.secondaryPressed},
   primary: {color: COLOR.primary, pressed: COLOR.primaryPressed},
   // design.md no define su pulsado: es el mismo ámbar, más oscuro.
   warning: {color: COLOR.warning, pressed: hex("#E0B662")},
+  // Fuera de design.md: el rojo de la paleta, para acciones que cierran o terminan algo (Cerrar sesión compartida).
+  danger: {color: hex("#FF453A"), pressed: hex("#D93A31")},
 }
 
 // Radios en cm: la escala de la guía (11 px y 18 px) a ~0,1 cm/px para distancia de lectura.

@@ -411,6 +411,8 @@ export class CanvasDockUI extends BaseScriptComponent {
         }
         this.setStatus("«" + label + "» es de ejemplo: todavía no está disponible")
       })
+      // Iniciar en azul; Cerrar, en rojo, para distinguirlos de un vistazo.
+      if (isSession && this.sharedSession) btn.onInitialized.add(() => paintPill(btn, true, TONE.danger))
       btn.getSceneObject().getTransform().setLocalPosition(new vec3(PAD + inner / 2, y - PANEL_BTN_H / 2, 0))
       y -= PANEL_BTN_H + GAP
     }
