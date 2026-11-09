@@ -97,12 +97,14 @@ const SUBMENUS: Record<EdgeSubmenu, {action: string; label: string; icon: Textur
     {action: "shape:process", label: "Proceso", icon: ICON.square},
     {action: "shape:decision", label: "Decisión", icon: ICON.diamond},
     {action: "shape:terminator", label: "Inicio / fin", icon: ICON.stadium},
+    {action: "more:shapes", label: "Más formas", icon: ICON.more_horiz},
   ],
   stickers: [
     {action: "sticker:star", label: "Estrella", icon: ICON.star},
     {action: "sticker:heart", label: "Corazón", icon: ICON.favorite},
     {action: "sticker:warning", label: "Aviso", icon: ICON.warning},
     {action: "sticker:done", label: "Hecho", icon: ICON.check_circle},
+    {action: "more:stickers", label: "Más stickers", icon: ICON.more_horiz},
   ],
   templates: [
     {action: "template:flow", label: "Flujo", icon: ICON.account_tree},

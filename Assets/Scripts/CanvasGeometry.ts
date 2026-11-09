@@ -39,6 +39,16 @@ export function roundedRect(w: number, h: number, radius: number): vec2[] {
 }
 
 /** Contorno en sentido antihorario, centrado en el origen y con forma estrellada desde él. */
+/** Polígono regular de `n` lados inscrito en la elipse de semiejes hw, hh. */
+function regularPolygon(n: number, start: number, hw: number, hh: number): vec2[] {
+  const pts: vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const a = start + (i / n) * Math.PI * 2
+    pts.push(new vec2(Math.cos(a) * hw, Math.sin(a) * hh))
+  }
+  return pts
+}
+
 export function shapeOutline(shape: ShapeKind, w: number, h: number): vec2[] {
   const hw = w / 2
   const hh = h / 2
@@ -104,6 +114,37 @@ export function shapeOutline(shape: ShapeKind, w: number, h: number): vec2[] {
         pts.push(new vec2((x / 16) * hw, ((y + 2.5) / 14.5) * hh))
       }
       return pts.reverse()
+    }
+    case "hexagon":
+      return regularPolygon(6, 0, hw, hh)
+    case "pentagon":
+      return regularPolygon(5, Math.PI / 2, hw, hh)
+    case "octagon":
+      return regularPolygon(8, Math.PI / 8, hw, hh)
+    case "arrow": {
+      // Flecha gruesa hacia la derecha: cuerpo a media altura y punta del 45 % del ancho.
+      const neck = hw * 0.1
+      const body = hh * 0.45
+      return [
+        new vec2(hw, 0), new vec2(neck, hh), new vec2(neck, body), new vec2(-hw, body),
+        new vec2(-hw, -body), new vec2(neck, -body), new vec2(neck, -hh),
+      ]
+    }
+    case "speech": {
+      // Bocadillo: caja con un pico abajo a la izquierda.
+      const base = -hh + h * 0.25
+      return [
+        new vec2(hw, hh), new vec2(-hw, hh), new vec2(-hw, base), new vec2(-hw * 0.45, base),
+        new vec2(-hw * 0.55, -hh), new vec2(-hw * 0.2, base), new vec2(hw, base),
+      ]
+    }
+    case "cross": {
+      const a = hw * 0.34
+      const c = hh * 0.34
+      return [
+        new vec2(a, hh), new vec2(-a, hh), new vec2(-a, c), new vec2(-hw, c), new vec2(-hw, -c), new vec2(-a, -c),
+        new vec2(-a, -hh), new vec2(a, -hh), new vec2(a, -c), new vec2(hw, -c), new vec2(hw, c), new vec2(a, c),
+      ]
     }
     case "process":
     case "rect":

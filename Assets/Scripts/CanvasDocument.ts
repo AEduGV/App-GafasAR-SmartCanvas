@@ -6,6 +6,7 @@ export type ElementKind = "note" | "text" | "screen" | "shape" | "stroke"
 export type ShapeKind =
   | "rect" | "process" | "decision" | "terminator" | "data"
   | "circle" | "triangle" | "and" | "or" | "not" | "xor" | "star" | "heart"
+  | "hexagon" | "pentagon" | "octagon" | "arrow" | "speech" | "cross"
 
 export interface CanvasElement {
   id: string

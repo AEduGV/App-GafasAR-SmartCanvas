@@ -15,6 +15,7 @@ import {BorderGrab, Bounds, CanvasRenderer, elementZ, flushRetired, HitTarget, l
 import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {CanvasMannequin} from "./CanvasMannequin"
+import {CanvasLibrary, LibraryKind} from "./CanvasLibraryUI"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -143,10 +144,18 @@ const DEFAULT_SIZE: Record<string, [number, number]> = {
   or: [11, 8],
   not: [10, 7],
   xor: [11, 8],
+  hexagon: [12, 10],
+  pentagon: [11, 10],
+  octagon: [10, 10],
+  arrow: [14, 7],
+  speech: [14, 9],
+  cross: [9, 9],
+  star: [10, 10],
+  heart: [10, 9],
 }
 
 // Textos de ejemplo que se sustituyen al empezar a escribir.
-const PLACEHOLDERS = ["Nueva nota", "Texto", "Pantalla", "Proceso", "¿Decisión?", "Inicio", "Datos"]
+const PLACEHOLDERS = ["Nueva nota", "Texto", "Pantalla", "Proceso", "¿Decisión?", "Inicio", "Datos", "Post-it"]
 
 const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
   process: "Proceso",
@@ -230,6 +239,8 @@ export class CanvasApp extends BaseScriptComponent {
   private active: CanvasInstance
   private links: CanvasLinks
   private handwriting: HandwritingAssist
+  // Panel con todas las figuras o stickers, abierto desde el «…» del menú radial de un canvas.
+  private library: {canvas: CanvasInstance; panel: CanvasLibrary} | null = null
   // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
   private collaborator: {
     mannequin: CanvasMannequin
@@ -918,7 +929,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   /** Devuelve si había un menú abierto. */
   private closeEdgeMenu(): boolean {
-    let wheel = false
+    let wheel = this.closeLibrary()
     for (const c of this.canvases) {
       if (c.bar?.isWheelOpen) {
         c.bar.setWheel(false)
@@ -1135,6 +1146,7 @@ export class CanvasApp extends BaseScriptComponent {
     const bar = c.bar.sceneObject
     if (bar.enabled === show) return
     if (!show) {
+      if (this.library?.canvas === c) this.closeLibrary()
       if (this.menuCanvas === c) this.closeEdgeMenu()
       c.bar.setWheel(false)
     }
@@ -1607,6 +1619,40 @@ export class CanvasApp extends BaseScriptComponent {
     })
   }
 
+  /** Abre el panel de figuras o stickers junto a ese canvas, o lo cierra si ya estaba abierto. */
+  private toggleLibrary(canvas: CanvasInstance, kind: LibraryKind): void {
+    const same = this.library?.canvas === canvas && this.library.panel.kind === kind
+    this.closeLibrary()
+    if (same) {
+      this.dock.setStatus(this.toolHint())
+      return
+    }
+    const panel = new CanvasLibrary(canvas.root, kind, (action) => {
+      this.activate(canvas)
+      const [verb, arg] = action.split(":")
+      if (verb === "shape") this.addElement("shape", arg as ShapeKind)
+      else this.addSticker(arg)
+    })
+    panel.place(canvas.renderer.getBounds())
+    this.library = {canvas, panel}
+    this.dock.setStatus(kind === "shapes" ? "Elige una forma para añadir. Pulsa fuera para cerrar" : "Elige un sticker para añadir. Pulsa fuera para cerrar")
+  }
+
+  /** Devuelve si había uno abierto. */
+  private closeLibrary(): boolean {
+    if (!this.library) return false
+    this.library.panel.destroy()
+    this.library = null
+    return true
+  }
+
+  private rayHitsLibrary(origin: vec3, dir: vec3): boolean {
+    const lib = this.library
+    if (!lib) return false
+    const p = lib.canvas.rayPoint(origin, dir, 1.4)
+    return !!p && lib.panel.contains(p, lib.canvas.renderer.getBounds())
+  }
+
   /** El círculo de color o su rueda abierta: pulsarlos nunca cuenta como pulsar el canvas que tienen debajo. */
   private rayHitsPalette(origin: vec3, dir: vec3): boolean {
     return this.canvases.some((c) => {
@@ -1814,10 +1860,13 @@ export class CanvasApp extends BaseScriptComponent {
     let resolved = this.resolveTarget(target)
     if (target && !resolved) return // pulsación sobre un panel o un botón
 
+    // Una pulsación sobre el panel de figuras o stickers (aunque caiga entre dos botones) no lo cierra.
+    const panelRay = this.activeRay(interactor)
+    if (panelRay && this.rayHitsLibrary(panelRay.origin, panelRay.dir)) return
     // Pulsar fuera de un menú abierto solo lo cierra.
     if (this.closeEdgeMenu()) return
     const pressRay = this.activeRay(interactor)
-    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir) || this.handwriting.hitsRay(pressRay.origin, pressRay.dir) || this.rayHitsPalette(pressRay.origin, pressRay.dir))) return
+    if (pressRay && (this.rayHitsDock(pressRay.origin, pressRay.dir) || this.rayHitsLinkButton(pressRay.origin, pressRay.dir) || this.handwriting.hitsRay(pressRay.origin, pressRay.dir) || this.rayHitsPalette(pressRay.origin, pressRay.dir) || this.rayHitsLibrary(pressRay.origin, pressRay.dir))) return
     if (this.dock.closeMenu()) return
 
     const wasEditing = this.editing !== null
@@ -2013,6 +2062,7 @@ export class CanvasApp extends BaseScriptComponent {
       c.renderer.setTextFlipped(c.orientation === "horizontal" && c.toLocal(eye).y > 0)
       this.updateEdgeBarPose(c)
       this.updateButtonsVisibility(c, eye)
+      if (this.library?.canvas === c) this.library.panel.place(c.renderer.getBounds())
     }
     this.links.update()
     this.updateEraserRing()
@@ -2742,6 +2792,9 @@ export class CanvasApp extends BaseScriptComponent {
       case "sticker":
         this.addSticker(arg)
         break
+      case "more":
+        this.toggleLibrary(this.active, arg as LibraryKind)
+        break
       case "color":
         this.setColor(parseInt(arg))
         break
@@ -2891,16 +2944,26 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   private addSticker(name: string): void {
-    const pos = this.nextSpawn(7, 7)
-    const defs: Record<string, {shape: ShapeKind; color: number; text: string}> = {
+    const defs: Record<string, {shape: ShapeKind; color: number; text: string; kind?: ElementKind; size?: number}> = {
       star: {shape: "star", color: 3, text: ""},
       heart: {shape: "heart", color: 5, text: ""},
       warning: {shape: "triangle", color: 4, text: "!"},
       done: {shape: "circle", color: 2, text: "OK"},
+      postit: {shape: "rect", color: NOTE_COLOR, text: "Post-it", kind: "note", size: 11},
+      question: {shape: "circle", color: 1, text: "?"},
+      idea: {shape: "circle", color: 3, text: "Idea"},
+      like: {shape: "circle", color: 2, text: "+1"},
+      urgent: {shape: "hexagon", color: 4, text: "!!"},
+      stop: {shape: "octagon", color: 5, text: "STOP", size: 8},
     }
     const def = defs[name]
     if (!def) return
-    const el = this.doc.add({kind: "shape", shape: def.shape, x: pos.x, y: pos.y, w: 7, h: 7, layer: this.activeLayer, text: def.text, color: def.color})
+    const size = def.size ?? 7
+    const pos = this.nextSpawn(size, size)
+    const el = this.doc.add({
+      kind: def.kind ?? "shape", shape: def.shape, x: pos.x, y: pos.y, w: size, h: size,
+      layer: this.activeLayer, text: def.text, color: def.color,
+    })
     this.growAround(el.id)
     this.setTool("select")
     this.selection.clear()
