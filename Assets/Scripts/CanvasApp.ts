@@ -16,7 +16,7 @@ import {applyTemplate, TemplateName} from "./CanvasTemplates"
 import {HandwritingAssist, StrokeBounds} from "./CanvasHandwriting"
 import {CanvasMannequin} from "./CanvasMannequin"
 import {CanvasLibrary, LibraryKind} from "./CanvasLibraryUI"
-import {CanvasRipples} from "./CanvasRipples"
+import {AlignSide, CanvasRipples, EdgeGlow} from "./CanvasRipples"
 import {addPillEdge, makePill, paintPill, setPillIcon} from "./CanvasPill"
 import {COLOR, NOTE_COLOR, PALETTE, STROKE_WIDTHS, withAlpha} from "./CanvasTheme"
 
@@ -47,6 +47,8 @@ const SNAP_GAP = 0.4
 const ALIGN_NEAR = 10
 const ALIGN_DEPTH = 15
 const ALIGN_GAP = 1.5
+// En el eje en el que no se separan, a menos de esto (cm) se igualan un borde o el centro con los del otro.
+const ALIGN_SNAP = 3
 const ALIGN_MAX_ROTATION = 30
 // El botón de agrupar aparece entre dos canvas con menos de este hueco, en unidades del canvas.
 const LINK_BUTTON_GAP = 15
@@ -244,6 +246,14 @@ interface CanvasDrag {
   startView: {scale: number; distance: number}
 }
 
+/** Pose con la que quedaría un canvas agarrado al soltarlo. */
+interface DropPose {
+  center: vec3
+  rotation: quat
+  scale: number
+  orientation: Orientation
+}
+
 /** El botón que une o separa una pareja de canvas cercanos. */
 interface LinkButton {
   a: CanvasInstance
@@ -283,6 +293,8 @@ export class CanvasApp extends BaseScriptComponent {
   // `until`: al pegarse arrastrando, las ondas duran un momento; con la miniatura, mientras dure el contacto (null).
   // Canvas cuyos botones están creciendo al aparecer, con el momento en que empezaron.
   private buttonsAppear = new Map<CanvasInstance, number>()
+  // Brillo en el lado del canvas al que se pegaría el que se está arrastrando.
+  private alignGlow: {canvas: CanvasInstance; side: AlignSide; fx: EdgeGlow} | null = null
   private ripples: {canvas: CanvasInstance; fx: CanvasRipples; orientation: Orientation | null; until: number | null} | null = null
   // Colaborador de ejemplo: un maniquí que construye una plantilla en su propio canvas.
   private collaborator: {
@@ -1420,6 +1432,9 @@ export class CanvasApp extends BaseScriptComponent {
     this.queryDragSurface(ray.origin, ray.dir, press)
     if (drag.ball) {
       this.updateBall(drag, ray.origin, ray.dir)
+      // Con la miniatura, el brillo avisa de con qué canvas se alineará donde caería al soltarla.
+      const ball = drag.ball
+      this.updateAlignGlow(ball && ball.travelled ? drag.members.map((m) => m.canvas) : null, ball ? this.predictDrop(drag, ball) : null)
       return
     }
     const tr = drag.transition
@@ -1434,6 +1449,7 @@ export class CanvasApp extends BaseScriptComponent {
     // Un rayo casi paralelo a la superficie mandaría el canvas al infinito.
     if (q && q.distance(this.camera.getWorldPosition()) < MAX_DRAG_DISTANCE) drag.target = q
     this.applyDragPose(drag)
+    this.updateAlignGlow(drag.members.map((m) => m.canvas))
   }
 
   /** A partir de aquí el canvas se sujeta por su centro, que es donde quedará al soltarlo, y se encoge. */
@@ -1546,23 +1562,31 @@ export class CanvasApp extends BaseScriptComponent {
       this.applyDragPose(drag)
       return false
     }
+    const pose = this.predictDrop(drag, ball)
+    drag.rotation = pose.rotation
+    drag.target = pose.center
+    drag.scale = pose.scale
+    for (const m of drag.members) m.canvas.orientation = pose.orientation
+    this.applyDragPose(drag)
+    return true
+  }
+
+  /** Dónde y cómo quedaría el canvas agarrado si se soltara ahora (su centro, porque se sujeta por él). */
+  private predictDrop(drag: CanvasDrag, ball: NonNullable<CanvasDrag["ball"]>): DropPose {
     const hit = drag.surface
     const fresh = hit && getTime() - hit.time < 0.5 ? hit : null
     const limit = fresh ? fresh.position.distance(ball.origin) - BALL_SURFACE_GAP : ball.distance
     const point = ball.origin.add(ball.dir.uniformScale(Math.max(BALL_SURFACE_GAP, Math.min(ball.distance, limit))))
     // La misma regla que las ondas: solo una superficie a 1,5 m o menos; más lejos, flotando de frente.
     const contact = this.ballContact(drag)
-    const near = contact ? fresh : null
     const frame = contact ? contact.frame : null
     const basis = this.basisFor("vertical")
-    drag.rotation = frame ? quat.lookAt(frame.normal, frame.up) : quat.lookAt(basis.normal, basis.up)
-    drag.target = frame && near ? near.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
+    const rotation = frame ? quat.lookAt(frame.normal, frame.up) : quat.lookAt(basis.normal, basis.up)
+    const center = frame && contact ? contact.position.add(frame.normal.uniformScale(SURFACE_OFFSET)) : point
     // Se ve del mismo tamaño que antes de agarrarlo: más lejos, más grande en proporción a la distancia.
-    const ratio = drag.target.distance(ball.origin) / Math.max(1, ball.distance)
-    drag.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, ball.fullScale * ratio))
-    for (const m of drag.members) m.canvas.orientation = frame ? frame.orientation : "vertical"
-    this.applyDragPose(drag)
-    return true
+    const ratio = center.distance(ball.origin) / Math.max(1, ball.distance)
+    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, ball.fullScale * ratio))
+    return {center, rotation, scale, orientation: frame ? frame.orientation : "vertical"}
   }
 
   private applyDragPose(drag: CanvasDrag): void {
@@ -1674,24 +1698,26 @@ export class CanvasApp extends BaseScriptComponent {
   }
 
   /**
-   * Al soltar un canvas muy cerca de otro, se coloca a su lado: con su mismo giro, los bordes superiores a la misma
-   * altura y una separación fija. No lo hace si tendría que girar más de 30 grados. Mueve el grupo entero si lo hay.
+   * Con qué canvas se alinearía el que se mueve si se soltara ahora, y por qué lado de ese otro: el de la dirección en
+   * la que está. Hace falta que estén muy cerca (`ALIGN_NEAR`), casi en el mismo plano (`ALIGN_DEPTH`), con la misma
+   * orientación y sin tener que girar más de `ALIGN_MAX_ROTATION` grados.
    */
-  private alignToNeighbour(moved: CanvasInstance[]): boolean {
+  private alignmentFor(moved: CanvasInstance[], pose: DropPose | null = null): {other: CanvasInstance; side: AlignSide} | null {
     const anchor = moved[0]
     const ab = anchor.renderer.getBounds()
-    const anchorCenterLocal = new vec3((ab.minX + ab.maxX) / 2, (ab.minY + ab.maxY) / 2, 0)
-    const center = anchor.toWorld(anchorCenterLocal)
-    let best: {other: CanvasInstance; gap: number} | null = null
+    // Con `pose`, se comprueba dónde quedaría al soltar la miniatura en vez de dónde está ahora.
+    const center = pose ? pose.center : anchor.toWorld(new vec3((ab.minX + ab.maxX) / 2, (ab.minY + ab.maxY) / 2, 0))
+    const rotation = pose ? pose.rotation : anchor.transform.getWorldRotation()
+    const scale = pose ? pose.scale : anchor.scale
+    const orientation = pose ? pose.orientation : anchor.orientation
+    let best: {other: CanvasInstance; side: AlignSide; gap: number} | null = null
     for (const other of this.canvases) {
-      if (moved.indexOf(other) >= 0 || !other.placed || other.orientation !== anchor.orientation) continue
+      if (moved.indexOf(other) >= 0 || !other.placed || other.orientation !== orientation) continue
       if (moved.some((m) => this.isGrouped(m, other))) continue
-      // Giro necesario para igualarlo: ángulo del cuaternión que lleva de uno a otro.
-      const rel = other.transform.getWorldRotation().multiply(anchor.transform.getWorldRotation().invert())
-      const angle = 2 * Math.acos(Math.min(1, Math.abs(rel.w)))
-      if (angle > (ALIGN_MAX_ROTATION * Math.PI) / 180) continue
+      const rel = other.transform.getWorldRotation().multiply(rotation.invert())
+      if (2 * Math.acos(Math.min(1, Math.abs(rel.w))) > (ALIGN_MAX_ROTATION * Math.PI) / 180) continue
       const ob = other.renderer.getBounds()
-      const f = anchor.scale / other.scale
+      const f = scale / other.scale
       const hw = ((ab.maxX - ab.minX) / 2) * f
       const hh = ((ab.maxY - ab.minY) / 2) * f
       const lc = other.toLocal(center)
@@ -1701,11 +1727,28 @@ export class CanvasApp extends BaseScriptComponent {
       const gapX = Math.max(ob.minX - (lc.x + hw), lc.x - hw - ob.maxX)
       const gapY = Math.max(ob.minY - (lc.y + hh), lc.y - hh - ob.maxY)
       if (gapX * cm > ALIGN_NEAR || gapY * cm > ALIGN_NEAR) continue
+      // El lado es el eje en el que están más separados: al lado, encima o debajo.
+      const side: AlignSide =
+        gapX >= gapY ? (lc.x >= (ob.minX + ob.maxX) / 2 ? "right" : "left") : lc.y >= (ob.minY + ob.maxY) / 2 ? "top" : "bottom"
       const gap = Math.max(gapX, gapY)
-      if (!best || gap < best.gap) best = {other, gap}
+      if (!best || gap < best.gap) best = {other, side, gap}
     }
-    if (!best) return false
-    const other = best.other
+    return best ? {other: best.other, side: best.side} : null
+  }
+
+  /**
+   * Al soltar un canvas muy cerca de otro, se pega a él por el lado por el que se acercó: toma su mismo giro y su plano,
+   * y solo se corrige la distancia entre los dos (`ALIGN_GAP`). En el otro eje se queda donde se soltó, salvo que esté
+   * a menos de `ALIGN_SNAP` cm de alinear un borde o el centro con los del otro, que entonces los iguala.
+   */
+  private alignToNeighbour(moved: CanvasInstance[]): boolean {
+    const found = this.alignmentFor(moved)
+    if (!found) return false
+    const {other, side} = found
+    const anchor = moved[0]
+    const ab = anchor.renderer.getBounds()
+    const centerLocal = new vec3((ab.minX + ab.maxX) / 2, (ab.minY + ab.maxY) / 2, 0)
+    const center = anchor.toWorld(centerLocal)
     // 1. Mismo giro que el otro, alrededor del centro del que se movió.
     const rel = other.transform.getWorldRotation().multiply(anchor.transform.getWorldRotation().invert())
     for (const c of moved) {
@@ -1713,23 +1756,59 @@ export class CanvasApp extends BaseScriptComponent {
       t.setWorldRotation(rel.multiply(t.getWorldRotation()))
       t.setWorldPosition(center.add(rel.multiplyVec3(t.getWorldPosition().sub(center))))
     }
-    // 2. A su lado, con los bordes superiores a la misma altura.
+    // 2. Pegado por ese lado, en el plano del otro, moviéndolo lo mínimo.
     const ob = other.renderer.getBounds()
     const f = anchor.scale / other.scale
     const hw = ((ab.maxX - ab.minX) / 2) * f
     const hh = ((ab.maxY - ab.minY) / 2) * f
-    const now = anchor.toWorld(anchorCenterLocal)
+    const now = anchor.toWorld(centerLocal)
     const lc = other.toLocal(now)
-    const side = lc.x >= (ob.minX + ob.maxX) / 2 ? 1 : -1
     const gap = ALIGN_GAP / other.scale
-    const target = new vec3(side > 0 ? ob.maxX + gap + hw : ob.minX - gap - hw, ob.maxY - hh, 0)
-    const delta = other.toWorld(target).sub(now)
+    const snap = ALIGN_SNAP / other.scale
+    const snapTo = (v: number, options: number[]) => {
+      let bestV = v
+      let bestD = snap
+      for (const o of options) {
+        if (Math.abs(v - o) < bestD) {
+          bestD = Math.abs(v - o)
+          bestV = o
+        }
+      }
+      return bestV
+    }
+    let x = lc.x
+    let y = lc.y
+    if (side === "left" || side === "right") {
+      x = side === "right" ? ob.maxX + gap + hw : ob.minX - gap - hw
+      y = snapTo(lc.y, [ob.maxY - hh, ob.minY + hh, (ob.minY + ob.maxY) / 2])
+    } else {
+      y = side === "top" ? ob.maxY + gap + hh : ob.minY - gap - hh
+      x = snapTo(lc.x, [ob.minX + hw, ob.maxX - hw, (ob.minX + ob.maxX) / 2])
+    }
+    const delta = other.toWorld(new vec3(x, y, 0)).sub(now)
     for (const c of moved) {
       c.transform.setWorldPosition(c.transform.getWorldPosition().add(delta))
       c.orientation = other.orientation
     }
-    this.log("canvas " + anchor.id + " alineado con " + other.id)
+    this.log("canvas " + anchor.id + " alineado con " + other.id + " por " + side)
     return true
+  }
+
+  /** Mientras se arrastra, el lado del otro canvas al que se pegaría brilla y lanza ondas. */
+  private updateAlignGlow(moved: CanvasInstance[] | null, pose: DropPose | null = null): void {
+    const found = moved ? this.alignmentFor(moved, pose) : null
+    const glow = this.alignGlow
+    if (glow && (!found || glow.canvas !== found.other || glow.side !== found.side)) {
+      // Si su canvas se borró, el brillo se fue con él.
+      if (this.canvases.includes(glow.canvas)) glow.fx.destroy()
+      this.alignGlow = null
+    }
+    if (!found) return
+    if (!this.alignGlow) {
+      const fx = new EdgeGlow(found.other.root, found.other.renderer.getBounds(), found.side, found.other.scale)
+      this.alignGlow = {canvas: found.other, side: found.side, fx}
+    }
+    this.alignGlow.fx.update()
   }
 
   /** Al soltar cerca de otro canvas, los deja exactamente pegados y en el mismo plano. */
@@ -1753,6 +1832,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private endMoveCanvas(press: Press): void {
     const drag = press.drag
+    this.updateAlignGlow(null)
     // Un toque en el interior, sin arrastrar ni agarrar, solo deselecciona.
     if (drag && !drag.moved && !drag.ball) {
       this.clearSelection()
