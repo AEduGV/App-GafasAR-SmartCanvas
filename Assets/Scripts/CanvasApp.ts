@@ -75,9 +75,6 @@ const COLLAB_SIDE_GAP = 12
 const COLLAB_FRONT = 40
 const COLLAB_FIRST_DELAY = 1.2
 const COLLAB_STEP = 0.9
-// En bucle (a petición del usuario, 2026-11-09): la deja terminada un rato, la borra pieza a pieza y vuelve a empezar.
-const COLLAB_HOLD = 5
-const COLLAB_CLEAR_STEP = 0.3
 // Escala de su canvas: más pequeño que uno propio a esa distancia, para que quepan él y Ana en la vista.
 const COLLAB_SCALE = 1.1
 // Etiqueta con el nombre de quien creó un canvas ajeno, en unidades del canvas.
@@ -307,10 +304,6 @@ export class CanvasApp extends BaseScriptComponent {
     ids: Map<string, string>
     next: number
     nextAt: number
-    // "build": añade piezas; "hold": la deja terminada; "clear": quita sus piezas (nunca los stickers del usuario).
-    phase: "build" | "hold" | "clear"
-    // Vueltas terminadas: solo la primera se anuncia en la línea de estado.
-    loops: number
   } | null = null
   private linkRubber: MeshSlot
   private placing: Placing | null = null
@@ -1080,7 +1073,7 @@ export class CanvasApp extends BaseScriptComponent {
     const mannequin = new CanvasMannequin(this.sceneObject, COLLAB_NAME, COLLAB_COLOR)
     mannequin.place(new vec3(feet.x, floorY, feet.z), center.sub(feet))
 
-    this.collaborator = {mannequin, canvas, steps, ids: new Map(), next: 0, nextAt: getTime() + COLLAB_FIRST_DELAY, phase: "build", loops: 0}
+    this.collaborator = {mannequin, canvas, steps, ids: new Map(), next: 0, nextAt: getTime() + COLLAB_FIRST_DELAY}
     this.refreshBorders()
     this.dock.setPeople([COLLAB_NAME])
     this.dock.setStatus(COLLAB_NAME + " joined and is building a card sorting")
@@ -1167,15 +1160,7 @@ export class CanvasApp extends BaseScriptComponent {
       return
     }
     col.mannequin.update(getDeltaTime(), eye)
-    if (getTime() < col.nextAt) return
-    if (col.phase === "hold") {
-      col.phase = "clear"
-      canvas.busy = true
-    }
-    if (col.phase === "clear") {
-      this.clearCollaboratorStep(col)
-      return
-    }
+    if (col.next >= col.steps.length || getTime() < col.nextAt) return
     const step = col.steps[col.next++]
     col.nextAt = getTime() + COLLAB_STEP
     if (step.kind === "el") {
@@ -1198,34 +1183,14 @@ export class CanvasApp extends BaseScriptComponent {
     }
     if (col.next >= col.steps.length) {
       canvas.busy = false
-      col.phase = "hold"
-      col.nextAt = getTime() + COLLAB_HOLD
-      // Al terminar, baja el brazo y mira hacia ti mientras la deja a la vista.
+      col.nextAt = Infinity
+      // Al terminar, baja el brazo y mira hacia ti.
       const finish = (): void => col.mannequin.setTarget(null)
       const ev = this.createEvent("DelayedCallbackEvent")
       ev.bind(finish)
       ev.reset(COLLAB_STEP)
-      if (col.loops++ === 0) this.dock.setStatus(COLLAB_NAME + " finished their card sorting")
+      this.dock.setStatus(COLLAB_NAME + " finished their card sorting")
     }
-  }
-
-  /** Quita la última pieza que puso Ana (y sus flechas con ella); al acabar, vuelve a construir desde el principio. */
-  private clearCollaboratorStep(col: NonNullable<CanvasApp["collaborator"]>): void {
-    const canvas = col.canvas
-    const ids = Array.from(col.ids.values()).filter((id) => canvas.doc.elements.has(id))
-    const last = ids[ids.length - 1]
-    if (!last) {
-      col.ids.clear()
-      col.next = 0
-      col.phase = "build"
-      col.nextAt = getTime() + COLLAB_FIRST_DELAY
-      col.mannequin.setTarget(null)
-      return
-    }
-    const el = canvas.doc.elements.get(last)
-    if (el) col.mannequin.setTarget(canvas.toWorld(new vec3(el.x, el.y, 1)), true)
-    canvas.doc.remove(last)
-    col.nextAt = getTime() + COLLAB_CLEAR_STEP
   }
 
   /** Una copia del canvas con todo su contenido, justo a su derecha y con la misma forma, tamaño y orientación. */
