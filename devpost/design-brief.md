@@ -75,7 +75,7 @@ Each one can be checked in Lens Studio's preview (Sunlit Room).
 
 ## Risks and open questions
 - The main menu and status line are head-locked. That goes against "not stuck to the face", but they are small, in the corner, and always reachable. Their position was measured for the preview's visible area; on real Specs it is unmeasured.
-- Handwriting recognition needs internet and short-lived Remote Service Gateway tokens. Without them the status line warns once, and typing with the keyboard still works. The tokens are not in the repository: generate them in Lens Studio (Window > Remote Service Gateway Token) before trying it.
+- Handwriting recognition needs internet and short-lived Remote Service Gateway tokens. Without them the status line warns once, and typing with the keyboard still works. The tokens are not in the repository: generate them in Lens Studio (Window > Remote Service Gateway Token) before trying it. Step by step: [`IMPORTANT_HANDWRITING_TOKENS.md`](../IMPORTANT_HANDWRITING_TOKENS.md).
 - The 3D model and its table button are placed for the Sunlit Room. In another preview room they do not sit on a table.
 - Feel unproven: comfort over time, real hand tracking, contrast on the real additive display, and the usable area of real Specs.
 - Known bug: Spectacles Interaction Kit sometimes logs "Object is null" when erasing shapes or stickers with the real mouse.
