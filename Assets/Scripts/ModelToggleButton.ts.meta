@@ -1,0 +1,49 @@
+- !<AssetImportMetadata/1eb3cada-8362-45f5-9247-e8862e7c6a4a>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> 02fee8b4-c565-4958-b067-16d9e3e1eb98
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> 02fee8b4-c565-4958-b067-16d9e3e1eb98
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 07e44fa0-0be5-4173-9c84-9a4e5b226f4e
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/07e44fa0-0be5-4173-9c84-9a4e5b226f4e>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  VersionPrerelease: ""
+  UpdateOrder: 0
+  ComponentUid: adb0a7fe-e0d9-42c5-9383-9d4de83644b7
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    size: false
+    target: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - target: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      size: !<float> 5.000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - '// @input SceneObject target {"hint":"Objeto que el botón muestra y oculta"}'
+    - '// @input float size = 5 {"hint":"Lado del botón (cm)"}'

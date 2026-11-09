@@ -70,6 +70,7 @@ export const ICON = {
   trending_flat: requireAsset("../Icons/trending_flat_128x128.png") as Texture,
   undo: requireAsset("../Icons/undo_128x128.png") as Texture,
   ungroup: requireAsset("../Icons/ungroup_128x128.png") as Texture,
+  view_in_ar: requireAsset("../Icons/view_in_ar_128x128.png") as Texture,
   view_kanban: requireAsset("../Icons/view_kanban_128x128.png") as Texture,
   warning: requireAsset("../Icons/warning_128x128.png") as Texture,
   web_asset: requireAsset("../Icons/web_asset_128x128.png") as Texture,

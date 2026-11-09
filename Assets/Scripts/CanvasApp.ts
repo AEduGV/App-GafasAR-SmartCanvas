@@ -2183,6 +2183,8 @@ export class CanvasApp extends BaseScriptComponent {
       if (target && !this.resolveTarget(target)) return
       const ray = this.activeRay(interactor)
       if (!ray || this.rayHitsDock(ray.origin, ray.dir)) return
+      // El botón de la maqueta en la mesa (u otro botón de la escena) no marca una esquina.
+      if (this.rayHitsSceneButton(ray.origin, ray.dir)) return
       if (this.dock.closeMenu()) return
       if (!this.corner) {
         if (this.cornerQuery) return
@@ -2236,6 +2238,9 @@ export class CanvasApp extends BaseScriptComponent {
     }
 
     if (!resolved) {
+      // Un botón de la escena que no es de la app (el de la maqueta en la mesa) lo atiende su propio script.
+      const outRay = this.activeRay(interactor)
+      if (outRay && this.rayHitsSceneButton(outRay.origin, outRay.dir)) return
       // Pulsar fuera siempre empieza otro canvas, sea cual sea la herramienta o aunque se estuviera escribiendo.
       this.startCanvasOutside(interactor)
       return
@@ -2702,11 +2707,26 @@ export class CanvasApp extends BaseScriptComponent {
     })
   }
 
+  /** Si lo primero que toca el rayo (fuera de la app) es un botón de la escena: algo con Interactable. */
+  private rayHitsSceneButton(origin: vec3, dir: vec3): boolean {
+    const hit = this.sceneHit(origin, dir)
+    let so: SceneObject | null = hit ? hit.collider.getSceneObject() : null
+    while (so) {
+      if (so.getComponent(Interactable.getTypeName())) return true
+      so = so.getParent()
+    }
+    return false
+  }
+
   /**
    * El punto más cercano en el que el rayo toca un objeto 3D de la escena (con colisionador) que no sea de la propia
    * app: ni canvas ni sus botones, ni el menú pegado a la vista ni SIK. La sala real la detecta `hitTest` aparte.
    */
   private sceneObjectHit(origin: vec3, dir: vec3): vec3 | null {
+    return this.sceneHit(origin, dir)?.position ?? null
+  }
+
+  private sceneHit(origin: vec3, dir: vec3): RayCastHit | null {
     if (!this.physicsProbe) this.physicsProbe = Physics.createGlobalProbe()
     const hits = this.physicsProbe.rayCastAllSync(origin, origin.add(dir.uniformScale(WORLD_ARROW_REACH)))
     const camera = this.camera.getSceneObject()
@@ -2717,7 +2737,7 @@ export class CanvasApp extends BaseScriptComponent {
         if (so === this.sceneObject || so === camera || so.name === "SpectaclesInteractionKit") ours = true
         so = so.getParent()
       }
-      if (!ours) return hit.position
+      if (!ours) return hit
     }
     return null
   }
