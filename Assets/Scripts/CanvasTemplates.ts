@@ -20,20 +20,20 @@ export function applyTemplate(doc: CanvasDocument, name: TemplateName, b: Bounds
   switch (name) {
     case "flow": {
       const sx = w / 4.4
-      const start = add(shape("terminator", cx - sx * 1.5, cy + h * 0.22, "Inicio", 12, 6, 0, 2))
-      const step = add(shape("process", cx - sx * 0.3, cy + h * 0.22, "Proceso"))
-      const dec = add(shape("decision", cx + sx * 1.1, cy + h * 0.22, "¿Correcto?", 17, 11, 0, 3))
-      const end = add(shape("terminator", cx + sx * 1.1, cy - h * 0.28, "Fin", 12, 6, 0, 2))
-      const fix = add(shape("process", cx - sx * 0.3, cy - h * 0.28, "Corregir", 14, 7, 0, 4))
+      const start = add(shape("terminator", cx - sx * 1.5, cy + h * 0.22, "Start", 12, 6, 0, 2))
+      const step = add(shape("process", cx - sx * 0.3, cy + h * 0.22, "Process"))
+      const dec = add(shape("decision", cx + sx * 1.1, cy + h * 0.22, "Correct?", 17, 11, 0, 3))
+      const end = add(shape("terminator", cx + sx * 1.1, cy - h * 0.28, "End", 12, 6, 0, 2))
+      const fix = add(shape("process", cx - sx * 0.3, cy - h * 0.28, "Fix", 14, 7, 0, 4))
       doc.connect(start, step)
       doc.connect(step, dec)
-      doc.connect(dec, end, "Sí")
+      doc.connect(dec, end, "Yes")
       doc.connect(dec, fix, "No")
       doc.connect(fix, step)
       break
     }
     case "cards": {
-      const cols = ["Categoría A", "Categoría B", "Categoría C"]
+      const cols = ["Category A", "Category B", "Category C"]
       const colW = (w - 8) / 3
       cols.forEach((title, i) => {
         const x = cx + (i - 1) * (colW + 1.5)
@@ -55,11 +55,11 @@ export function applyTemplate(doc: CanvasDocument, name: TemplateName, b: Bounds
       break
     }
     case "journey": {
-      const stages = ["Descubrir", "Probar", "Usar"]
+      const stages = ["Discover", "Try", "Use"]
       const rows: {title: string; color: number}[] = [
-        {title: "Acción", color: 1},
-        {title: "Dificultad", color: 5},
-        {title: "Oportunidad", color: 2},
+        {title: "Action", color: 1},
+        {title: "Pain point", color: 5},
+        {title: "Opportunity", color: 2},
       ]
       const colW = (w - 6) / 3
       const rowH = (h - 10) / 3
@@ -83,11 +83,11 @@ export function applyTemplate(doc: CanvasDocument, name: TemplateName, b: Bounds
     }
     case "architecture": {
       const sx = w * 0.24
-      const client = add(shape("process", cx - sx * 0.2, cy + h * 0.3, "App cliente", 15, 7, 2, 1))
+      const client = add(shape("process", cx - sx * 0.2, cy + h * 0.3, "Client app", 15, 7, 2, 1))
       const api = add(shape("process", cx - sx * 0.2, cy, "API", 13, 7, 1, 2))
-      const auth = add(shape("process", cx + sx * 1.1, cy, "Autenticación", 18, 7, 1, 4))
-      const db = add(shape("process", cx - sx * 1.1, cy - h * 0.3, "Base de datos", 18, 7, 0, 3))
-      const files = add(shape("process", cx + sx * 0.7, cy - h * 0.3, "Archivos", 14, 7, 0, 3))
+      const auth = add(shape("process", cx + sx * 1.1, cy, "Authentication", 18, 7, 1, 4))
+      const db = add(shape("process", cx - sx * 1.1, cy - h * 0.3, "Database", 18, 7, 0, 3))
+      const files = add(shape("process", cx + sx * 0.7, cy - h * 0.3, "Files", 14, 7, 0, 3))
       doc.connect(client, api)
       doc.connect(api, auth)
       doc.connect(api, db)
@@ -95,7 +95,7 @@ export function applyTemplate(doc: CanvasDocument, name: TemplateName, b: Bounds
       break
     }
     case "sequence": {
-      const people = ["Usuario", "App", "Servidor"]
+      const people = ["User", "App", "Server"]
       const spacing = (w - 22) / 2
       const xs = people.map((_, i) => cx + (i - 1) * spacing)
       people.forEach((title, i) => add(shape("process", xs[i], b.maxY - 4, title, 13, 5, 0, 1)))
@@ -116,10 +116,10 @@ export function applyTemplate(doc: CanvasDocument, name: TemplateName, b: Bounds
       const stepH = (lifeTop - lifeBottom) / 4
       const node = (col: number, row: number, text: string): string =>
         add(shape("terminator", xs[col], lifeTop - stepH * (row + 0.6), text, 11, 3.6, 0, 0))
-      const a = node(0, 0, "Pedir")
-      const c = node(1, 0, "Recibir")
-      const d = node(2, 1, "Procesar")
-      const e = node(1, 2, "Mostrar")
+      const a = node(0, 0, "Request")
+      const c = node(1, 0, "Receive")
+      const d = node(2, 1, "Process")
+      const e = node(1, 2, "Show")
       doc.connect(a, c)
       doc.connect(c, d)
       doc.connect(d, e)

@@ -165,13 +165,13 @@ const DEFAULT_SIZE: Record<string, [number, number]> = {
 }
 
 // Textos de ejemplo que se sustituyen al empezar a escribir.
-const PLACEHOLDERS = ["Nueva nota", "Texto", "Pantalla", "Proceso", "¿Decisión?", "Inicio", "Datos", "Post-it"]
+const PLACEHOLDERS = ["New note", "Text", "Screen", "Process", "Decision?", "Start", "Data", "Post-it"]
 
 const SHAPE_TEXT: Partial<Record<ShapeKind, string>> = {
-  process: "Proceso",
-  decision: "¿Decisión?",
-  terminator: "Inicio",
-  data: "Datos",
+  process: "Process",
+  decision: "Decision?",
+  terminator: "Start",
+  data: "Data",
   and: "AND",
   or: "OR",
   not: "NOT",
@@ -244,7 +244,7 @@ interface SurfaceHit {
 @component
 export class CanvasApp extends BaseScriptComponent {
   @input
-  @hint("Panel de herramientas")
+  @hint("Tools panel")
   dock: CanvasDockUI
 
   private canvases: CanvasInstance[] = []
@@ -588,7 +588,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.clearSelection()
     this.dock.setPhase("place")
     this.syncPlacementButtons()
-    this.dock.setStatus("Pellizca una esquina del canvas sobre una mesa o una pared")
+    this.dock.setStatus("Pinch a corner of the canvas on a table or a wall")
   }
 
   /** Pulsar fuera de los canvas empieza otro; los que ya existen no se tocan. */
@@ -603,7 +603,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private beginReplace(): void {
     if (this.active.groupId) {
-      this.dock.setStatus("Separa el grupo antes de volver a colocar este canvas")
+      this.dock.setStatus("Ungroup before placing this canvas again")
       return
     }
     const t = this.active.transform
@@ -625,7 +625,7 @@ export class CanvasApp extends BaseScriptComponent {
     const placing = this.placing
     if (placing && !(placing.isNew && !placing.previous)) {
       this.cancelPlacement()
-      this.dock.setStatus("Canvas cancelado")
+      this.dock.setStatus("Canvas cancelled")
       return
     }
     this.corner = null
@@ -633,7 +633,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.press = null
     this.cornerA.setVisible(false)
     this.canvasRoot.enabled = false
-    this.dock.setStatus("Canvas cancelado. Pellizca una esquina para empezar otro")
+    this.dock.setStatus("Canvas cancelled. Pinch a corner to start another one")
     this.log("canvas cancelado")
   }
 
@@ -641,7 +641,7 @@ export class CanvasApp extends BaseScriptComponent {
     const placing = this.placing
     if (!placing) return
     if (placing.isNew && !placing.previous) {
-      this.dock.setStatus("Coloca tu primer canvas para empezar")
+      this.dock.setStatus("Place your first canvas to get started")
       return
     }
     this.corner = null
@@ -796,7 +796,7 @@ export class CanvasApp extends BaseScriptComponent {
     t.setWorldRotation(quat.lookAt(this.planeNormal, this.planeUp))
     this.cornerA.setVisible(true)
     this.canvasRoot.enabled = true
-    this.dock.setStatus("Ahora pellizca la esquina opuesta")
+    this.dock.setStatus("Now pinch the opposite corner")
   }
 
   /** El canvas siempre mira al usuario, venga como venga la normal de la superficie. */
@@ -855,8 +855,8 @@ export class CanvasApp extends BaseScriptComponent {
     this.setTool("select")
     this.dock.setStatus(
       this.canvases.length > 1
-        ? "Canvas " + this.canvases.length + " listo. Enlázalo con Flecha o júntalo con otro"
-        : "Canvas listo. Crea una nota o pulsa + para ver sus herramientas"
+        ? "Canvas " + this.canvases.length + " ready. Link it with Arrow or put it next to another one"
+        : "Canvas ready. Create a note or press + to see its tools"
     )
     this.log("canvas " + this.active.id + " " + this.orientation + " (total " + this.canvases.length + ")")
   }
@@ -877,7 +877,7 @@ export class CanvasApp extends BaseScriptComponent {
     const holder = global.scene.createSceneObject("UndoButton")
     holder.setParent(canvas.root)
     holder.createComponent("Component.Canvas")
-    const undo = makePill(holder, "Deshacer", UNDO_SIZE, UNDO_SIZE, 56, () => false, () => this.undo(canvas), ICON.undo)
+    const undo = makePill(holder, "Undo", UNDO_SIZE, UNDO_SIZE, 56, () => false, () => this.undo(canvas), ICON.undo)
     addPillEdge(undo)
     canvas.undoButton = holder
     return bar
@@ -885,7 +885,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private onEdgeAction(canvas: CanvasInstance, action: EdgeAction): void {
     if (this.phase === "place") {
-      this.dock.setStatus("Termina de colocar el canvas o pulsa Cancelar")
+      this.dock.setStatus("Finish placing the canvas or press Cancel")
       return
     }
     this.dock.closeMenu()
@@ -895,7 +895,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.closeEdgeMenu()
       canvas.bar?.setWheel(open)
       const forSelection = canvas === this.active && this.colorTargets().length > 0
-      this.dock.setStatus(open ? (forSelection ? "Elige un color para lo seleccionado" : "Elige un color para dibujar") : this.toolHint())
+      this.dock.setStatus(open ? (forSelection ? "Pick a color for the selection" : "Pick a color to draw with") : this.toolHint())
       this.log("borde " + canvas.id + " palette")
       return
     }
@@ -911,20 +911,20 @@ export class CanvasApp extends BaseScriptComponent {
         canvas.bar?.setOpen(true)
         this.dock.setStatus(
           this.tool === "select"
-            ? "Elige una herramienta. Pulsa fuera para cerrar"
-            : "Elige otra herramienta o pulsa el centro para soltar la actual"
+            ? "Pick a tool. Tap outside to close"
+            : "Pick another tool or tap the center to drop the current one"
         )
       } else if (this.tool !== "select") {
         // Con el menú abierto, el centro suelta la herramienta: el canvas vuelve a moverse y estirarse.
         this.setTool("select")
-        this.dock.setStatus("Herramienta desactivada")
+        this.dock.setStatus("Tool turned off")
       }
       return
     }
     if (action === "shapes" || action === "stickers" || action === "templates") {
       const open = canvas.bar?.toggleSubmenu(action) ?? false
-      const prompt = action === "shapes" ? "Elige una forma para añadir" : action === "stickers" ? "Elige un sticker" : "Elige una plantilla"
-      this.dock.setStatus(open ? prompt : "Elige una herramienta. Pulsa fuera para cerrar")
+      const prompt = action === "shapes" ? "Pick a shape to add" : action === "stickers" ? "Pick a sticker" : "Pick a template"
+      this.dock.setStatus(open ? prompt : "Pick a tool. Tap outside to close")
       return
     }
     if (action === "duplicate") {
@@ -974,7 +974,7 @@ export class CanvasApp extends BaseScriptComponent {
    */
   private inviteCollaborator(): void {
     if (this.collaborator) {
-      this.dock.setStatus(this.collaborator.mannequin.name + " ya está en este espacio")
+      this.dock.setStatus(this.collaborator.mannequin.name + " is already in this space")
       return
     }
     const eye = this.camera.getWorldPosition()
@@ -1037,7 +1037,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.collaborator = {mannequin, canvas, steps, ids: new Map(), next: 0, nextAt: getTime() + COLLAB_FIRST_DELAY}
     this.refreshBorders()
     this.dock.setPeople([COLLAB_NAME])
-    this.dock.setStatus(COLLAB_NAME + " se ha unido y está creando un diagrama de flujo")
+    this.dock.setStatus(COLLAB_NAME + " joined and is building a flowchart")
     this.log("colaborador " + COLLAB_NAME + " en " + canvas.id)
   }
 
@@ -1117,7 +1117,7 @@ export class CanvasApp extends BaseScriptComponent {
       const ev = this.createEvent("DelayedCallbackEvent")
       ev.bind(finish)
       ev.reset(COLLAB_STEP)
-      this.dock.setStatus(COLLAB_NAME + " ha terminado su diagrama de flujo")
+      this.dock.setStatus(COLLAB_NAME + " finished their flowchart")
     }
   }
 
@@ -1139,7 +1139,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.ensureEdgeBar(copy).sceneObject.enabled = true
     this.activate(copy)
     this.refreshBorders()
-    this.dock.setStatus("Canvas duplicado a la derecha del original")
+    this.dock.setStatus("Canvas duplicated to the right of the original")
     this.log("canvas " + src.id + " duplicado en " + copy.id)
   }
 
@@ -1273,7 +1273,7 @@ export class CanvasApp extends BaseScriptComponent {
     this.commitUndoStates()
     const prev = canvas.undoStack.pop()
     if (!prev) {
-      this.dock.setStatus("No hay nada que deshacer en este canvas")
+      this.dock.setStatus("Nothing to undo on this canvas")
       return
     }
     this.clearSelection()
@@ -1285,7 +1285,7 @@ export class CanvasApp extends BaseScriptComponent {
     canvas.undoDirty = false
     canvas.undoBounds = canvas.renderer.getBounds()
     canvas.undoShape = canvas.renderer.shape
-    this.dock.setStatus(canvas.undoStack.length > 0 ? "Deshecho. Pulsa otra vez para deshacer más" : "Deshecho")
+    this.dock.setStatus(canvas.undoStack.length > 0 ? "Undone. Press again to undo more" : "Undone")
     this.log("deshacer en " + canvas.id + " (quedan " + canvas.undoStack.length + ")")
   }
 
@@ -1380,7 +1380,7 @@ export class CanvasApp extends BaseScriptComponent {
       distance: from.distance(eye), origin: eye, startOrigin: eye, dir: this.camera.back, travelled: false,
     }
     this.closeEdgeMenu()
-    this.dock.setStatus("Lleva el canvas adonde quieras y suelta para colocarlo")
+    this.dock.setStatus("Carry the canvas wherever you want and release to place it")
     this.log("canvas " + anchor.id + " agarrado")
   }
 
@@ -1424,13 +1424,13 @@ export class CanvasApp extends BaseScriptComponent {
     const orientation = contact?.frame.orientation ?? null
     if (this.ripples && (this.ripples.canvas !== canvas || this.ripples.orientation !== orientation)) this.clearRipples()
     if (!contact || !orientation) {
-      if (drag.ball) this.dock.setStatus("Lleva el canvas adonde quieras y suelta para colocarlo")
+      if (drag.ball) this.dock.setStatus("Carry the canvas wherever you want and release to place it")
       return
     }
     if (!this.ripples) {
       const fx = new CanvasRipples(canvas.root, canvas.renderer.outlinePoints(), canvas.renderer.getBounds())
       this.ripples = {canvas, fx, orientation, until: null}
-      this.dock.setStatus(orientation === "vertical" ? "Tocando la pared: suelta para pegarlo" : "Tocando la mesa: suelta para dejarlo encima")
+      this.dock.setStatus(orientation === "vertical" ? "Touching the wall: release to stick it" : "Touching the table: release to lay it on top")
     }
     this.ripples.fx.update()
   }
@@ -1564,7 +1564,7 @@ export class CanvasApp extends BaseScriptComponent {
     }
     for (const m of drag.members) m.canvas.orientation = frame.orientation
     this.flashRipples(drag.members[0].canvas)
-    this.dock.setStatus(frame.orientation === "vertical" ? "Pegado a la pared" : "Pegado a la mesa")
+    this.dock.setStatus(frame.orientation === "vertical" ? "Stuck to the wall" : "Laid on the table")
     this.log("canvas " + drag.members[0].canvas.id + " pasa a " + frame.orientation)
   }
 
@@ -1642,7 +1642,7 @@ export class CanvasApp extends BaseScriptComponent {
     const near = this.canvases.some(
       (c) => moved.indexOf(c) < 0 && c.placed && moved.some((m) => !this.isGrouped(m, c) && this.linkButtonGap(m, c))
     )
-    this.dock.setStatus(near ? "Canvas juntos: pulsa el botón entre ellos para agruparlos" : this.toolHint())
+    this.dock.setStatus(near ? "Canvases side by side: press the button between them to group them" : this.toolHint())
     this.log("canvas movido" + (snapped ? " y pegado" : ""))
   }
 
@@ -1674,7 +1674,7 @@ export class CanvasApp extends BaseScriptComponent {
     const entry: LinkButton = {a, b, root, grouped: false, button: null}
     entry.button = makePill(
       root,
-      "Agrupar o separar",
+      "Group or ungroup",
       LINK_BUTTON_SIZE,
       LINK_BUTTON_SIZE,
       56,
@@ -1745,7 +1745,7 @@ export class CanvasApp extends BaseScriptComponent {
     })
     panel.place(canvas.renderer.getBounds())
     this.library = {canvas, panel}
-    this.dock.setStatus(kind === "shapes" ? "Elige una forma para añadir. Pulsa fuera para cerrar" : "Elige un sticker para añadir. Pulsa fuera para cerrar")
+    this.dock.setStatus(kind === "shapes" ? "Pick a shape to add. Tap outside to close" : "Pick a sticker to add. Tap outside to close")
   }
 
   /** Devuelve si había uno abierto. */
@@ -1791,7 +1791,7 @@ export class CanvasApp extends BaseScriptComponent {
     if (this.editing) this.finishEditing()
     if (this.isGrouped(a, b)) {
       for (const c of this.groupMembers(a)) c.groupId = null
-      this.dock.setStatus("Grupo separado")
+      this.dock.setStatus("Group split")
       this.log("grupo separado")
       return
     }
@@ -1800,7 +1800,7 @@ export class CanvasApp extends BaseScriptComponent {
     members.forEach((c) => {
       c.groupId = gid
     })
-    this.dock.setStatus(members.size + " canvas agrupados: al mover uno se mueven juntos")
+    this.dock.setStatus(members.size + " canvases grouped: move one and they all move together")
     this.log("grupo " + gid + " con " + members.size)
   }
 
@@ -1811,7 +1811,7 @@ export class CanvasApp extends BaseScriptComponent {
       armed?.canvas.bar?.setDeleteArmed(false)
       this.deleteArmed = {canvas, until: getTime() + DELETE_CONFIRM_TIME}
       canvas.bar?.setDeleteArmed(true)
-      this.dock.setStatus("Este canvas tiene contenido: pulsa la papelera otra vez para borrarlo", "warning")
+      this.dock.setStatus("This canvas has content: press the trash can again to delete it", "warning")
       return
     }
     this.pendingDelete = canvas
@@ -1865,7 +1865,7 @@ export class CanvasApp extends BaseScriptComponent {
       if (this.active === canvas) this.active = this.canvases[this.canvases.length - 1]
       canvas.destroy()
       this.refreshBorders()
-        this.dock.setStatus("Canvas borrado")
+        this.dock.setStatus("Canvas deleted")
     }
     this.log("canvas borrado " + id + " (quedan " + this.canvases.filter((c) => c.placed).length + ")")
   }
@@ -1909,7 +1909,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private flip(): void {
     if (this.active.groupId) {
-      this.dock.setStatus("Separa el grupo antes de girar este canvas")
+      this.dock.setStatus("Ungroup before rotating this canvas")
       return
     }
     const next: Orientation = this.orientation === "vertical" ? "horizontal" : "vertical"
@@ -2005,7 +2005,7 @@ export class CanvasApp extends BaseScriptComponent {
     // El canvas de otra persona no se puede tocar.
     if ("canvas" in resolved && resolved.canvas.owner) {
       const owner = resolved.canvas.owner.name
-      this.dock.setStatus(resolved.canvas.busy ? owner + " está trabajando en este canvas" : "Este canvas es de " + owner + ": solo puede editarlo quien lo creó")
+      this.dock.setStatus(resolved.canvas.busy ? owner + " is working on this canvas" : "This canvas belongs to " + owner + ": only its creator can edit it")
       return
     }
     if ("link" in resolved) {
@@ -2310,38 +2310,38 @@ export class CanvasApp extends BaseScriptComponent {
     this.refreshColorTargets()
     if (this.phase !== "work" || this.editing || getTime() < this.noticeUntil) return
     if (this.selection.size > 1) {
-      this.dock.setStatus(this.selection.size + " elementos seleccionados")
+      this.dock.setStatus(this.selection.size + " items selected")
     } else if (this.selection.size === 1) {
       const el = this.selectedElement()
       this.dock.setStatus(el ? this.describe(el) : "")
     } else if (this.links.getSelected()) {
-      this.dock.setStatus("Enlace entre canvas seleccionado: pulsa Borrar para quitarlo")
+      this.dock.setStatus("Link between canvases selected: press Delete to remove it")
     } else if (this.selectedConn) {
-      this.dock.setStatus("Flecha seleccionada: edita su etiqueta o bórrala")
+      this.dock.setStatus("Arrow selected: edit its label or delete it")
     } else {
       this.dock.setStatus(this.toolHint())
     }
   }
 
   private describe(el: CanvasElement): string {
-    const label = el.text ? el.text.split("\n")[0] : el.kind === "stroke" ? "Trazo" : "Sin texto"
-    return "Seleccionado: " + label + " · capa " + (el.layer + 1)
+    const label = el.text ? el.text.split("\n")[0] : el.kind === "stroke" ? "Stroke" : "No text"
+    return "Selected: " + label + " · layer " + (el.layer + 1)
   }
 
   private toolHint(): string {
     switch (this.tool) {
       case "connect":
-        return "Arrastra de un bloque a otro, o de este canvas a otro canvas"
+        return "Drag from one block to another, or from this canvas to another canvas"
       case "draw":
-        return "Dibuja sobre el canvas: fuera de él no se pinta"
+        return "Draw on the canvas: nothing is painted outside it"
       case "erase":
-        return "Arrastra para borrar: los trazos se borran por partes y lo demás, entero"
+        return "Drag to erase: strokes are erased in parts and everything else whole"
       case "underline":
-        return "Pellizca un elemento para subrayarlo"
+        return "Pinch an item to underline it"
       default:
         return this.multi
-          ? "Toca varios elementos y pulsa Agrupar"
-          : "Arrastra el canvas para moverlo o un borde para estirarlo. Mantén pulsado para agarrarlo"
+          ? "Tap several items and press Group"
+          : "Drag the canvas to move it or an edge to stretch it. Press and hold to grab it"
     }
   }
 
@@ -2380,12 +2380,12 @@ export class CanvasApp extends BaseScriptComponent {
     const other = ray ? this.canvasUnderRay(ray.origin, ray.dir, this.active) : null
     if (other) {
       const added = this.links.add(this.active, other)
-      this.dock.setStatus(added ? "Canvas enlazados" : "Esos canvas ya están enlazados")
+      this.dock.setStatus(added ? "Canvases linked" : "Those canvases are already linked")
       this.log("enlace " + this.active.id + " -> " + other.id + (added ? "" : " (ya existia)"))
       return
     }
     if (!press.id) {
-      this.dock.setStatus("Suelta la flecha sobre otro canvas")
+      this.dock.setStatus("Release the arrow on another canvas")
       return
     }
     const direct = this.renderer.target(interactor.currentInteractable)
@@ -2394,14 +2394,14 @@ export class CanvasApp extends BaseScriptComponent {
       toId = this.elementAtPointer(interactor, press.id)
     }
     if (!toId) {
-      this.dock.setStatus("Suelta la flecha sobre otro bloque")
+      this.dock.setStatus("Release the arrow on another block")
       return
     }
     const from = this.doc.elements.get(press.id)
     const taken = this.doc.outgoingCount(press.id)
-    const label = from?.shape === "decision" ? (taken === 0 ? "Sí" : taken === 1 ? "No" : "") : ""
+    const label = from?.shape === "decision" ? (taken === 0 ? "Yes" : taken === 1 ? "No" : "") : ""
     const conn = this.doc.connect(press.id, toId, label)
-    this.dock.setStatus(conn ? "Conexión creada" : "Esos bloques ya están conectados")
+    this.dock.setStatus(conn ? "Connection created" : "Those blocks are already connected")
     this.log("conexion " + press.id + " -> " + toId + (conn ? "" : " (ya existia)"))
   }
 
@@ -2508,7 +2508,7 @@ export class CanvasApp extends BaseScriptComponent {
       tint: inkColor ? [inkColor.x, inkColor.y, inkColor.z] : null,
     })
     this.growAround(el.id)
-    this.dock.setStatus("Escritura convertida en texto. Deshacer recupera los trazos")
+    this.dock.setStatus("Handwriting converted to text. Undo brings the strokes back")
     this.log("escritura convertida en " + el.id)
   }
 
@@ -2675,7 +2675,7 @@ export class CanvasApp extends BaseScriptComponent {
       parentId: el.id,
       points: [new vec2(-w / 2, 0), new vec2(w / 2, 0)],
     })
-    this.dock.setStatus("Subrayado añadido")
+    this.dock.setStatus("Underline added")
   }
 
   // ── Texto ────────────────────────────────────────────────────────────────
@@ -2705,7 +2705,7 @@ export class CanvasApp extends BaseScriptComponent {
     } else {
       const el = this.selectedElement()
       if (!el || el.kind === "stroke") {
-        this.dock.setStatus("Selecciona primero un elemento con texto")
+        this.dock.setStatus("First select an item with text")
         return
       }
       this.editing = {type: "element", id: el.id, original: el.text, created, startH: el.h}
@@ -2714,7 +2714,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.openKeyboard(this.editFresh ? "" : el.text)
     }
     this.active?.bar?.setActive("write")
-    this.dock.setStatus("Escribe con el teclado. Toca fuera del texto para terminar")
+    this.dock.setStatus("Type with the keyboard. Tap outside the text to finish")
   }
 
   private openKeyboard(initial: string): void {
@@ -2743,7 +2743,7 @@ export class CanvasApp extends BaseScriptComponent {
   private setEditingText(text: string): void {
     if (!this.editing) return
     if (Array.from(text).length > MAX_TEXT) {
-      this.dock.setStatus("Máximo " + MAX_TEXT + " caracteres", "error")
+      this.dock.setStatus("Maximum " + MAX_TEXT + " characters", "error")
       return
     }
     if (this.editing.type === "element") {
@@ -2801,7 +2801,7 @@ export class CanvasApp extends BaseScriptComponent {
     } else if (required && !text) {
       this.doc.update(el.id, {text: original, h: startH, y: el.y + (el.h - startH) / 2})
       this.noticeUntil = getTime() + NOTICE_TIME
-      this.dock.setStatus("El texto no puede quedar vacío: se recupera el anterior", "error")
+      this.dock.setStatus("The text can't be empty: the previous one is restored", "error")
     } else if (text !== el.text) {
       this.doc.update(el.id, {text})
     }
@@ -2874,14 +2874,14 @@ export class CanvasApp extends BaseScriptComponent {
         const placed = this.canvases.filter((c) => c.placed).length
         this.dock.setStatus(
           arg === "all"
-            ? placed === 1 ? "Canvas guardado" : "Guardados los " + placed + " canvas"
-            : "Canvas seleccionado guardado"
+            ? placed === 1 ? "Canvas saved" : "Saved all " + placed + " canvases"
+            : "Selected canvas saved"
         )
         break
       }
       // Una Lens no puede cerrarse sola: solo informa.
       case "exit":
-        this.dock.setStatus("Para salir, usa el gesto del sistema de las gafas")
+        this.dock.setStatus("To exit, use the glasses' system gesture")
         break
       case "tool":
         this.setTool(arg as Tool)
@@ -2985,13 +2985,13 @@ export class CanvasApp extends BaseScriptComponent {
     const targets = this.colorTargets()
     if (targets.length > 0) {
       for (const el of targets) this.doc.update(el.id, {tint: rgb})
-      this.dock.setStatus(targets.length === 1 ? "Color cambiado" : "Color cambiado en " + targets.length + " elementos")
+      this.dock.setStatus(targets.length === 1 ? "Color changed" : "Color changed on " + targets.length + " items")
       this.log("color de " + targets.map((el) => el.id).join(", "))
       return
     }
     this.drawTint = color
     for (const c of this.canvases) c.bar?.setDrawColor(color)
-    this.dock.setStatus("Color elegido: dibuja sobre el canvas")
+    this.dock.setStatus("Color picked: draw on the canvas")
     this.log("color de dibujo " + rgb.map((v) => v.toFixed(2)).join(","))
   }
 
@@ -3011,7 +3011,7 @@ export class CanvasApp extends BaseScriptComponent {
       this.publishSelection()
     } else {
       this.activeLayer = Math.max(0, Math.min(LAYER_COUNT - 1, this.activeLayer + delta))
-      this.dock.setStatus("Lo nuevo se creará en la capa " + (this.activeLayer + 1))
+      this.dock.setStatus("New items will be created on layer " + (this.activeLayer + 1))
     }
   }
 
@@ -3043,7 +3043,7 @@ export class CanvasApp extends BaseScriptComponent {
     const color =
       this.color >= 0 ? this.color : kind === "note" ? NOTE_COLOR : shape === "decision" ? NOTE_COLOR : kind === "shape" ? 1 : 0
     const text =
-      kind === "note" ? "Nueva nota" : kind === "text" ? "Texto" : isScreen ? "Pantalla" : (SHAPE_TEXT[shape] ?? "")
+      kind === "note" ? "New note" : kind === "text" ? "Text" : isScreen ? "Screen" : (SHAPE_TEXT[shape] ?? "")
     const el = this.doc.add({kind, shape, x: pos.x, y: pos.y, w, h, layer: this.activeLayer, text, color})
     this.growAround(el.id)
     this.setTool("select")
@@ -3091,14 +3091,14 @@ export class CanvasApp extends BaseScriptComponent {
 
   private groupSelection(): void {
     const ids = Array.from(this.selection)
-    if (this.doc.group(ids)) this.dock.setStatus(ids.length + " elementos agrupados")
-    else this.dock.setStatus("Activa Varios y selecciona al menos dos elementos")
+    if (this.doc.group(ids)) this.dock.setStatus(ids.length + " items grouped")
+    else this.dock.setStatus("Turn on Multiple and select at least two items")
   }
 
   private ungroupSelection(): void {
     const el = this.selectedElement()
     if (!el?.groupId) {
-      this.dock.setStatus("Este elemento no pertenece a un grupo")
+      this.dock.setStatus("This item isn't in a group")
       return
     }
     this.doc.ungroup(el.id)
@@ -3119,9 +3119,9 @@ export class CanvasApp extends BaseScriptComponent {
     this.elementDeleteArmed = {key, until: getTime() + DELETE_CONFIRM_TIME}
     this.dock.setActive("delete", true)
     const el = this.selection.size === 1 ? this.selectedElement() : null
-    const name = el ? "«" + (el.text ? el.text.split("\n")[0] : "este elemento") + "»" : this.selection.size + " elementos"
+    const name = el ? "\"" + (el.text ? el.text.split("\n")[0] : "this item") + "\"" : this.selection.size + " items"
     this.noticeUntil = getTime() + DELETE_CONFIRM_TIME
-    this.dock.setStatus("Pulsa Borrar otra vez para eliminar " + name, "warning")
+    this.dock.setStatus("Press Delete again to remove " + name, "warning")
     return false
   }
 
@@ -3142,7 +3142,7 @@ export class CanvasApp extends BaseScriptComponent {
 
   private useTemplate(name: TemplateName): void {
     if (this.doc.elements.size > 0) {
-      this.dock.setStatus("Vacía el canvas antes de aplicar una plantilla")
+      this.dock.setStatus("Clear the canvas before applying a template")
       return
     }
     const b = this.renderer.getBounds()
@@ -3162,22 +3162,22 @@ export class CanvasApp extends BaseScriptComponent {
     applyTemplate(this.doc, name, this.renderer.getBounds())
     this.doc.elements.forEach((el) => this.renderer.growToFit(el.id))
     this.setTool("select")
-    this.dock.setStatus("Plantilla lista: todo se puede editar")
-    this.log("plantilla " + name + " con " + this.doc.elements.size + " elementos")
+    this.dock.setStatus("Template ready: everything is editable")
+    this.log("plantilla " + name + " con " + this.doc.elements.size + " items")
   }
 
   private clearAll(): void {
     const now = getTime()
     if (now > this.clearArmedUntil) {
       this.clearArmedUntil = now + 3
-      this.dock.setStatus("Pulsa Vaciar otra vez para borrarlo todo", "warning")
+      this.dock.setStatus("Press Clear again to delete everything", "warning")
       return
     }
     this.clearArmedUntil = -1
     this.doc.clear()
     this.clearSelection()
     this.spawnIndex = 0
-    this.dock.setStatus("Canvas vacío")
+    this.dock.setStatus("Canvas cleared")
   }
 
   private log(msg: string): void {

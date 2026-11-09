@@ -497,7 +497,7 @@ export class CanvasRenderer {
       this.layerPlanes.push(plane)
       const label = makeText(plane.sceneObject, 39, COLOR.textMuted)
       label.horizontalAlignment = HorizontalAlignment.Left
-      label.text = "Capa " + (i + 1)
+      label.text = "Layer " + (i + 1)
       this.layerLabels.push(label)
     }
     this.content = global.scene.createSceneObject("Content")

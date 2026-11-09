@@ -17,7 +17,7 @@ Pide no inventar APIs y verificar las capacidades de la plataforma.
 - Guardar versiones y Snap Cloud quedan fuera por ahora. Internet sí se da por disponible desde el 2026-11-08, para reconocer la escritura a mano.
 - Plazo: 4 días desde el 2026-11-04. Se acepta no llegar a todo.
 - La identidad visual sigue `indicaciones/design.md`, que Alba Anton revisó el 2026-11-07. `apple-brand-package/` queda solo como referencia, y su `DESIGN.md` está vacío.
-- El usuario se comunica en español: responde y escribe los textos de la interfaz en español.
+- El usuario se comunica en español: respóndele en español. **Los textos de la interfaz van en inglés** desde el 2026-11-09, a petición del usuario (botones, paneles, línea de estado, plantillas, stickers, colores y el botón de convertir la escritura). Los nombres entre comillas de este documento son los antiguos en español; el código tiene su traducción. Los mensajes internos de registro (`[CanvasAR]`) siguen en español.
 
 ## Guías de producto (`indicaciones/`)
 

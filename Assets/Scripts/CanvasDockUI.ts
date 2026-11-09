@@ -82,11 +82,11 @@ interface ButtonDef {
 
 // El menú solo tiene estos iconos (2026-11-08). Guardar y Salir son de demostración: no guardan ni cierran.
 const MAIN: ButtonDef[] = [
-  {label: "Cuenta", action: "info:account", icon: ICON.account_circle},
-  {label: "Colaboración", action: "info:collab", icon: ICON.groups},
-  {label: "Guardar", action: "info:save", icon: ICON.save},
-  {label: "Tutoriales", action: "info:tutorials", icon: ICON.school},
-  {label: "Salir", action: "exit", icon: ICON.logout},
+  {label: "Account", action: "info:account", icon: ICON.account_circle},
+  {label: "Collaboration", action: "info:collab", icon: ICON.groups},
+  {label: "Save", action: "info:save", icon: ICON.save},
+  {label: "Tutorials", action: "info:tutorials", icon: ICON.school},
+  {label: "Exit", action: "exit", icon: ICON.logout},
 ]
 
 // Paneles de ejemplo que se abren a la derecha del menú: un título, unas líneas y botones que aún no hacen nada.
@@ -100,20 +100,20 @@ const SESSION_BUTTON = "sesión compartida"
 
 const PANELS: Record<string, InfoPanel> = {
   account: {
-    title: "Cuenta",
-    lines: ["Usuario de ejemplo", "ejemplo@canvasar.app", "Para trabajar en equipo"],
-    buttons: ["Iniciar sesión", "Ajustes de la cuenta", "Cerrar sesión"],
+    title: "Account",
+    lines: ["Sample user", "ejemplo@canvasar.app", "To work as a team"],
+    buttons: ["Sign in", "Account settings", "Sign out"],
   },
   collab: {
-    title: "Colaboración",
-    lines: ["En este espacio: solo tú"],
+    title: "Collaboration",
+    lines: ["In this space: just you"],
     // La sesión compartida va al final y destacada; su texto cambia según esté abierta o no.
-    buttons: ["Invitar a alguien", "Permisos de edición", SESSION_BUTTON],
+    buttons: ["Invite someone", "Edit permissions", SESSION_BUTTON],
   },
   tutorials: {
-    title: "Tutoriales",
-    lines: ["Aprende paso a paso"],
-    buttons: ["Crear un canvas", "Dibujar y escribir", "El menú radial", "Mover y agrupar canvas", "De escritura a texto"],
+    title: "Tutorials",
+    lines: ["Learn step by step"],
+    buttons: ["Create a canvas", "Draw and write", "The radial menu", "Move and group canvases", "Handwriting to text"],
   },
 }
 
@@ -121,8 +121,8 @@ const PANEL_W = 26
 
 // Opciones que despliega Guardar, a su derecha.
 const SAVE_OPTIONS: ButtonDef[] = [
-  {label: "Guardar todos los canvas", action: "save:all", icon: ICON.folder_copy},
-  {label: "Guardar el canvas seleccionado", action: "save:canvas", icon: ICON.save_as},
+  {label: "Save all canvases", action: "save:all", icon: ICON.folder_copy},
+  {label: "Save the selected canvas", action: "save:canvas", icon: ICON.save_as},
 ]
 const PANEL_GAP = 1
 const PANEL_BTN_H = 3.8
@@ -134,8 +134,8 @@ const PANEL_TEXT_SIZE = 54
 const PLACEMENT: ButtonDef[] = [
   {label: "Horizontal", action: "orient:h", icon: ICON.crop_landscape},
   {label: "Vertical", action: "orient:v", icon: ICON.crop_portrait},
-  {label: "Colocar delante", action: "quick", icon: ICON.center_focus_strong},
-  {label: "Cancelar", action: "cancel", icon: ICON.close},
+  {label: "Place in front", action: "quick", icon: ICON.center_focus_strong},
+  {label: "Cancel", action: "cancel", icon: ICON.close},
 ]
 
 @component
@@ -231,7 +231,7 @@ export class CanvasDockUI extends BaseScriptComponent {
   private makeToggle(): void {
     const btn = makePill(
       this.sceneObject,
-      "Menú",
+      "Menu",
       TOGGLE_SIZE,
       TOGGLE_SIZE,
       BUTTON_SIZE,
@@ -394,24 +394,24 @@ export class CanvasDockUI extends BaseScriptComponent {
     y -= GAP
     for (const item of def.buttons) {
       const isSession = item === SESSION_BUTTON
-      const label = isSession ? (this.sharedSession ? "Cerrar sesión compartida" : "Iniciar sesión compartida") : item
+      const label = isSession ? (this.sharedSession ? "End shared session" : "Start shared session") : item
       // La sesión compartida lleva siempre el borde azul y grueso del estado activo: es la acción principal.
       const btn = makePill(body, label, inner, PANEL_BTN_H, BUTTON_SIZE, () => isSession, () => {
         if (isSession) {
           this.sharedSession = !this.sharedSession
-          this.setStatus(this.sharedSession ? "Sesión compartida iniciada: otras personas ya pueden unirse" : "Sesión compartida cerrada")
+          this.setStatus(this.sharedSession ? "Shared session started: others can join now" : "Shared session ended")
           // Se vuelve a montar el panel para que el botón muestre su texto nuevo.
           this.openPanel = null
           this.togglePanel("collab")
           return
         }
         // Invitar trae a un colaborador de ejemplo; los demás botones aún no hacen nada.
-        if (label === "Invitar a alguien") {
+        if (label === "Invite someone") {
           this._onAction.invoke("invite")
           this.togglePanel(null)
           return
         }
-        this.setStatus("«" + label + "» es de ejemplo: todavía no está disponible")
+        this.setStatus("\"" + label + "\" is a sample: not available yet")
       })
       // Iniciar en azul; Cerrar, en rojo, para distinguirlos de un vistazo.
       if (isSession && this.sharedSession) btn.onInitialized.add(() => paintPill(btn, true, TONE.danger))
@@ -627,7 +627,7 @@ export class CanvasDockUI extends BaseScriptComponent {
 
   /** Quién más está en el espacio, para el panel de Colaboración. */
   setPeople(names: string[]): void {
-    PANELS.collab.lines[0] = names.length === 0 ? "En este espacio: solo tú" : "En este espacio: tú y " + names.join(", ")
+    PANELS.collab.lines[0] = names.length === 0 ? "In this space: just you" : "In this space: you and " + names.join(", ")
   }
 
   /** Las pestañas de antes son ahora secciones: se despliega la suya. */
@@ -646,7 +646,7 @@ export class CanvasDockUI extends BaseScriptComponent {
     this.pendingStatus = msg
     this.pendingTone = tone
     this.writeStatus(
-      (tone === "warning" ? "Aviso: " : tone === "error" ? "Error: " : "") + msg,
+      (tone === "warning" ? "Warning: " : tone === "error" ? "Error: " : "") + msg,
       tone === "warning" ? COLOR.warning : tone === "error" ? COLOR.error : COLOR.textMuted
     )
   }

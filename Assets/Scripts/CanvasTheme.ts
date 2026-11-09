@@ -50,12 +50,12 @@ export interface PaletteEntry {
 }
 
 export const PALETTE: PaletteEntry[] = [
-  {name: "Grafito", stroke: hex("#F4F7FA"), fill: hex("#5f5f64")},
-  {name: "Azul", stroke: hex("#2997ff"), fill: hex("#14508f")},
-  {name: "Verde", stroke: hex("#30d158"), fill: hex("#1c6b35")},
-  {name: "Amarillo", stroke: hex("#ffd60a"), fill: hex("#806a00")}, // más claro no llega a 4,5:1 con el texto
-  {name: "Naranja", stroke: hex("#ff9f0a"), fill: hex("#99590a")},
-  {name: "Rojo", stroke: hex("#ff453a"), fill: hex("#8f2a24")},
+  {name: "Graphite", stroke: hex("#F4F7FA"), fill: hex("#5f5f64")},
+  {name: "Blue", stroke: hex("#2997ff"), fill: hex("#14508f")},
+  {name: "Green", stroke: hex("#30d158"), fill: hex("#1c6b35")},
+  {name: "Yellow", stroke: hex("#ffd60a"), fill: hex("#806a00")}, // más claro no llega a 4,5:1 con el texto
+  {name: "Orange", stroke: hex("#ff9f0a"), fill: hex("#99590a")},
+  {name: "Red", stroke: hex("#ff453a"), fill: hex("#8f2a24")},
 ]
 
 export const STROKE_WIDTHS = [0.25, 0.5, 1.0]

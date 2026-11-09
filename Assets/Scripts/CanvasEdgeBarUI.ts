@@ -72,46 +72,46 @@ interface ItemDef {
 }
 
 const TOOLS: {action: EdgeTool; label: string; icon: Texture}[] = [
-  {action: "draw", label: "Dibujar", icon: ICON.brush},
-  {action: "erase", label: "Goma", icon: ICON.ink_eraser},
-  {action: "write", label: "Escribir texto", icon: ICON.title},
-  {action: "arrow", label: "Flecha", icon: ICON.trending_flat},
+  {action: "draw", label: "Draw", icon: ICON.brush},
+  {action: "erase", label: "Eraser", icon: ICON.ink_eraser},
+  {action: "write", label: "Write text", icon: ICON.title},
+  {action: "arrow", label: "Arrow", icon: ICON.trending_flat},
 ]
 
 // En el orden del círculo, desde arriba y girando hacia la izquierda.
 const ITEMS: ItemDef[] = [
   ...TOOLS,
-  {action: "shapes", label: "Formas", icon: ICON.category},
+  {action: "shapes", label: "Shapes", icon: ICON.category},
   {action: "stickers", label: "Stickers", icon: ICON.kid_star},
-  {action: "templates", label: "Plantillas", icon: ICON.dashboard},
-  {action: "duplicate", label: "Duplicar canvas", icon: ICON.content_copy},
-  {action: "delete", label: "Borrar canvas", icon: ICON.delete},
+  {action: "templates", label: "Templates", icon: ICON.dashboard},
+  {action: "duplicate", label: "Duplicate canvas", icon: ICON.content_copy},
+  {action: "delete", label: "Delete canvas", icon: ICON.delete},
 ]
 
 // Las opciones de cada arco usan las mismas acciones que el menú principal.
 const SUBMENUS: Record<EdgeSubmenu, {action: string; label: string; icon: Texture}[]> = {
   shapes: [
-    {action: "shape:rect", label: "Rectángulo", icon: ICON.rectangle},
-    {action: "shape:circle", label: "Círculo", icon: ICON.circle},
-    {action: "shape:triangle", label: "Triángulo", icon: ICON.change_history},
-    {action: "shape:process", label: "Proceso", icon: ICON.square},
-    {action: "shape:decision", label: "Decisión", icon: ICON.diamond},
-    {action: "shape:terminator", label: "Inicio / fin", icon: ICON.stadium},
-    {action: "more:shapes", label: "Más formas", icon: ICON.more_horiz},
+    {action: "shape:rect", label: "Rectangle", icon: ICON.rectangle},
+    {action: "shape:circle", label: "Circle", icon: ICON.circle},
+    {action: "shape:triangle", label: "Triangle", icon: ICON.change_history},
+    {action: "shape:process", label: "Process", icon: ICON.square},
+    {action: "shape:decision", label: "Decision", icon: ICON.diamond},
+    {action: "shape:terminator", label: "Start / end", icon: ICON.stadium},
+    {action: "more:shapes", label: "More shapes", icon: ICON.more_horiz},
   ],
   stickers: [
-    {action: "sticker:star", label: "Estrella", icon: ICON.star},
-    {action: "sticker:heart", label: "Corazón", icon: ICON.favorite},
-    {action: "sticker:warning", label: "Aviso", icon: ICON.warning},
-    {action: "sticker:done", label: "Hecho", icon: ICON.check_circle},
-    {action: "more:stickers", label: "Más stickers", icon: ICON.more_horiz},
+    {action: "sticker:star", label: "Star", icon: ICON.star},
+    {action: "sticker:heart", label: "Heart", icon: ICON.favorite},
+    {action: "sticker:warning", label: "Warning", icon: ICON.warning},
+    {action: "sticker:done", label: "Done", icon: ICON.check_circle},
+    {action: "more:stickers", label: "More stickers", icon: ICON.more_horiz},
   ],
   templates: [
-    {action: "template:flow", label: "Flujo", icon: ICON.account_tree},
+    {action: "template:flow", label: "Flowchart", icon: ICON.account_tree},
     {action: "template:cards", label: "Card sorting", icon: ICON.view_kanban},
     {action: "template:journey", label: "User journey", icon: ICON.route},
-    {action: "template:architecture", label: "Arquitectura", icon: ICON.hub},
-    {action: "template:sequence", label: "Secuencia", icon: ICON.format_list_numbered},
+    {action: "template:architecture", label: "Architecture", icon: ICON.hub},
+    {action: "template:sequence", label: "Sequence", icon: ICON.format_list_numbered},
   ],
 }
 
@@ -228,7 +228,7 @@ export class CanvasEdgeBarUI extends BaseScriptComponent {
       this.subProgress.set(key, 0)
     }
 
-    this.hub = makePill(this.sceneObject, "Herramientas", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
+    this.hub = makePill(this.sceneObject, "Tools", HUB_SIZE, HUB_SIZE, TEXT_SIZE, () => this.opened || this.active !== null, () => this._onAction.invoke("menu"), ICON.add)
     addPillEdge(this.hub)
 
     this.buildPalette()

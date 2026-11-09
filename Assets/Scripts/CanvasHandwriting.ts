@@ -15,11 +15,11 @@ const MIN_SIDE = 96
 const LINE_PX = 5
 
 const PROMPT =
-  "La imagen muestra trazos dibujados a mano en una pizarra, en negro sobre blanco. " +
-  "Si contienen escritura, aunque sea una sola letra, una palabra corta o números, transcribe exactamente lo escrito, " +
-  "respetando mayúsculas, tildes y saltos de línea. Ante la duda entre letra y dibujo, elige la letra. " +
-  "Solo si son claramente dibujos, flechas, figuras geométricas o garabatos, devuelve un texto vacío. " +
-  'Responde solo con JSON: {"text": "..."}'
+  "The image shows strokes drawn by hand on a whiteboard, black on white. " +
+  "If they contain writing, even a single letter, a short word or numbers, transcribe exactly what is written, " +
+  "in its original language, keeping capitals, accents and line breaks. If unsure between a letter and a drawing, choose the letter. " +
+  "Only if they are clearly drawings, arrows, geometric shapes or scribbles, return an empty text. " +
+  'Reply only with JSON: {"text": "..."}'
 
 export interface StrokeBounds {
   minX: number
@@ -262,14 +262,14 @@ export class HandwritingAssist {
         this.log("escritura: error " + String(e).slice(0, 200))
         if (this.failedNotice) return
         this.failedNotice = true
-        this.onError("No se pudo leer la escritura. Revisa la conexión o renueva los tokens de Remote Service Gateway")
+        this.onError("Couldn't read the handwriting. Check the connection or renew the Remote Service Gateway tokens")
       })
   }
 
   private show(canvas: CanvasInstance, st: WatchState, ids: string[], text: string): void {
     this.hide(st)
     const flat = text.replace(/\s+/g, " ")
-    const label = "Convertir en texto: " + (flat.length > LABEL_MAX ? flat.slice(0, LABEL_MAX - 1) + "…" : flat)
+    const label = "Convert to text: " + (flat.length > LABEL_MAX ? flat.slice(0, LABEL_MAX - 1) + "…" : flat)
     const width = label.length * BUTTON_CHAR_W + 3
     const root = global.scene.createSceneObject("HandwritingButton")
     root.setParent(canvas.root)
